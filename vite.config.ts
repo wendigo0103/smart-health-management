@@ -2,8 +2,6 @@ import { defineConfig, Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
 import type { Server as HttpServer } from "node:http";
-import { createApp, attachSockets } from "./server";
-import { connectDb } from "./server/config/db";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -32,6 +30,10 @@ function expressPlugin(): Plugin {
     name: "express-plugin",
     apply: "serve",
     async configureServer(server) {
+      // Dynamic imports only during serve mode
+      const { createApp, attachSockets } = await import("./server");
+      const { connectDb } = await import("./server/config/db");
+
       try {
         await connectDb();
       } catch (err) {
