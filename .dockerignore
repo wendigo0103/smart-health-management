@@ -2,7 +2,6 @@ node_modules
 dist
 .git
 .gitignore
-README.md
 .env
 .env.local
 .env.development
@@ -26,28 +25,22 @@ coverage
 *.tmp
 *.tmp.*
 log.txt
-
-.DS_Store
-node_modules
+venv
+requirements.txt
+.mongo-data
+.netlify
 **/node_modules/**
 build
 data
-.env
 load-ids.txt
-
-server
 tmp
 types
-.git
-.gitignore
-dist
 service
 tests
 fixtures-pages
 fixtures-apps
 
 # Netlify
-.netlify
 packages/ml-air/lib
 packages/ml-air/bin
 packages/ml-air/project
@@ -59,4 +52,3 @@ packages/vcp-common/native-bridge/build
 packages/vcp-common/_tests_/dataset-ranking.csv
 node_modules/
 Dockerfile
-.gitignore
