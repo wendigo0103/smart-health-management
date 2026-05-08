@@ -85,13 +85,28 @@ export default function QueueTracker() {
     const onUpd = (snap: QueueSnapshot) => {
       if (snap.doctorId === doctorId) {
         setSnapshot(snap);
+        const activeToken = snap.currentPatientToken;
+        if (notificationsEnabled && activeToken === myToken && document.hidden) {
+          document.title = `Your turn: ${myToken}`;
+          if ("Notification" in window && Notification.permission === "granted") {
+            new Notification("HealthQueue", { body: `Token ${myToken}, please proceed to consultation.` });
+          }
+        }
       }
     };
     s.on("queueUpdated", onUpd);
     return () => {
       s.off("queueUpdated", onUpd);
+      document.title = "HealthQueue";
     };
-  }, [doctorId, myToken]);
+  }, [doctorId, myToken, notificationsEnabled]);
+
+  const toggleNotifications = async () => {
+    if (!notificationsEnabled && "Notification" in window && Notification.permission === "default") {
+      await Notification.requestPermission();
+    }
+    setNotificationsEnabled((v) => !v);
+  };
 
   const myEntry = useMemo(() => {
     if (!snapshot || !myToken) return null;
@@ -221,7 +236,7 @@ export default function QueueTracker() {
 
         <div className="flex flex-col sm:flex-row gap-3 mb-8">
           <Button
-            onClick={() => setNotificationsEnabled(!notificationsEnabled)}
+            onClick={() => void toggleNotifications()}
             variant="outline"
             className="flex-1 gap-2 border-primary text-primary hover:bg-blue-50"
           >

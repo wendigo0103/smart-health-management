@@ -16,8 +16,9 @@ export default function Auth() {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
-    phone: "",
+    phone: "+91 ",
     password: "",
+    role: "patient" as "patient" | "admin",
   });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -26,7 +27,7 @@ export default function Auth() {
   };
 
   const routeAfterAuth = (role: string) => {
-    if (role === "doctor" || role === "admin") {
+    if (role === "admin") {
       navigate("/admin/dashboard");
     } else {
       navigate("/dashboard");
@@ -62,7 +63,7 @@ export default function Auth() {
         password: formData.password,
         name: formData.name,
         phone: formData.phone,
-        role: "patient",
+        role: formData.role,
       };
       const res = await apiFetch<AuthResponse>("/api/auth/register", {
         method: "POST",
@@ -156,7 +157,7 @@ export default function Auth() {
                     <Input
                       type="text"
                       name="name"
-                      placeholder="John Doe"
+                      placeholder="Your Name"
                       value={formData.name}
                       onChange={handleInputChange}
                       required
@@ -170,13 +171,32 @@ export default function Auth() {
                     <Input
                       type="tel"
                       name="phone"
-                      placeholder="+1 (555) 123-4567"
+                      placeholder="+91 98765 43210"
                       value={formData.phone}
                       onChange={handleInputChange}
                       required
                       className="w-full"
                       autoComplete="tel"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Register as</label>
+                    <select
+                      name="role"
+                      value={formData.role}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          role: e.target.value as "patient" | "admin",
+                        }))
+                      }
+                      required
+                      className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      <option value="patient">Patient</option>
+                      <option value="admin">Admin</option>
+                    </select>
                   </div>
 
                   <div>

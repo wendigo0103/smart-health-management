@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { apiFetch, ApiError, getStoredUser } from "@/lib/api";
-import type { AppointmentDto } from "@shared/api";
+import type { AppointmentDto, DoctorDailyStats } from "@shared/api";
 import { toast } from "sonner";
 import { Pencil, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -33,7 +33,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-export type AppointmentStatus = "Confirmed" | "Pending" | "Cancelled";
+export type AppointmentStatus = "Confirmed" | "Pending" | "Cancelled" | "Completed";
 
 export interface AppointmentRow {
   id: string;
@@ -55,6 +55,7 @@ function mapDtoToRow(a: AppointmentDto): AppointmentRow {
     confirmed: "Confirmed",
     pending: "Pending",
     cancelled: "Cancelled",
+    completed: "Completed",
   };
   return {
     id: a.id,
@@ -74,6 +75,8 @@ function statusBadgeClass(status: AppointmentStatus) {
       return "bg-amber-100 text-amber-900 border-0";
     case "Cancelled":
       return "bg-slate-200 text-slate-700 border-0";
+    case "Completed":
+      return "bg-blue-100 text-primary border-0";
     default:
       return "border-0";
   }
@@ -85,16 +88,21 @@ export function AppointmentsScreen() {
   const [search, setSearch] = useState("");
   const [doctorFilter, setDoctorFilter] = useState<string>(ALL_DOCTORS_VALUE);
   const [editRow, setEditRow] = useState<AppointmentRow | null>(null);
+  const [doctorStats, setDoctorStats] = useState<DoctorDailyStats[]>([]);
 
   useEffect(() => {
-    if (!staffUser || (staffUser.role !== "doctor" && staffUser.role !== "admin")) {
+    if (!staffUser || staffUser.role !== "admin") {
       return;
     }
     let cancelled = false;
     (async () => {
       try {
-        const list = await apiFetch<AppointmentDto[]>("/api/appointments");
+        const [list, stats] = await Promise.all([
+          apiFetch<AppointmentDto[]>("/api/appointments"),
+          apiFetch<DoctorDailyStats[]>("/api/appointments/admin/doctor-stats"),
+        ]);
         if (!cancelled) setRows(list.map(mapDtoToRow));
+        if (!cancelled) setDoctorStats(stats);
       } catch {
         if (!cancelled) toast.error("Could not load appointments.");
       }
@@ -133,15 +141,36 @@ export function AppointmentsScreen() {
     }
   };
 
-  if (!staffUser || (staffUser.role !== "doctor" && staffUser.role !== "admin")) {
+  if (!staffUser || staffUser.role !== "admin") {
     return (
-      <p className="text-slate-600">Sign in as a doctor or admin to manage appointments.</p>
+      <p className="text-slate-600">Sign in as an admin to manage appointments.</p>
     );
   }
 
   return (
     <div className="space-y-6">
       <p className="text-slate-600">Search, filter, and manage scheduled visits.</p>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {doctorStats.map((stat) => (
+          <Card key={stat.doctorId} className="border-slate-200 bg-white">
+            <CardContent className="p-5">
+              <p className="font-semibold text-slate-900">{stat.doctorName}</p>
+              <p className="text-sm text-slate-500 mb-4">{stat.doctorDepartment}</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-md bg-blue-50 p-3">
+                  <p className="text-xs text-slate-600">Completed</p>
+                  <p className="text-2xl font-bold text-primary">{stat.completedAppointments}</p>
+                </div>
+                <div className="rounded-md bg-amber-50 p-3">
+                  <p className="text-xs text-slate-600">Remaining</p>
+                  <p className="text-2xl font-bold text-amber-700">{stat.remainingAppointments}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
         <div className="flex-1 space-y-2 min-w-0">

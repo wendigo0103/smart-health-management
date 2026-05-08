@@ -1,5 +1,6 @@
 import { Router, type RequestHandler } from "express";
 import mongoose from "mongoose";
+import type { ActiveQueueEntry, DoctorQueueSnapshot } from "@shared/api";
 import { requireAuth, requireRole } from "../middleware/auth";
 import {
   buildQueueSnapshot,
@@ -7,6 +8,7 @@ import {
   markCurrentAbsent,
 } from "../services/queue.service";
 import { broadcastQueueUpdate } from "../services/realtime.service";
+import { User } from "../models/User";
 
 const router = Router();
 
@@ -24,6 +26,51 @@ const getQueue: RequestHandler = async (req, res) => {
   }
   const snapshot = await buildQueueSnapshot(doctorId);
   res.json(snapshot);
+};
+
+const getAllDoctorQueues: RequestHandler = async (_req, res) => {
+  const doctors = await User.find({ role: "doctor" }).sort({ name: 1 }).lean();
+  const out: DoctorQueueSnapshot[] = await Promise.all(
+    doctors.map(async (doctor) => {
+      const doctorId = doctor._id.toString();
+      const snapshot = await buildQueueSnapshot(doctorId);
+      return {
+        ...snapshot,
+        doctorName: doctor.doctorProfile?.displayName || doctor.name,
+        doctorDepartment: doctor.doctorProfile?.specialization || "General",
+      };
+    })
+  );
+  res.json(out);
+};
+
+const getActiveQueue: RequestHandler = async (_req, res) => {
+  const doctors = await User.find({ role: "doctor" }).sort({ name: 1 }).lean();
+  const snapshots = await Promise.all(
+    doctors.map(async (doctor) => {
+      const doctorId = doctor._id.toString();
+      return {
+        doctor,
+        snapshot: await buildQueueSnapshot(doctorId),
+      };
+    })
+  );
+  const rows: ActiveQueueEntry[] = snapshots.flatMap(({ doctor, snapshot }) =>
+    snapshot.waitingList
+      .filter((entry) => entry.status === "waiting" || entry.status === "called")
+      .map((entry) => ({
+        doctorId: snapshot.doctorId,
+        doctorName: doctor.doctorProfile?.displayName || doctor.name,
+        doctorDepartment: doctor.doctorProfile?.specialization || "General",
+        patientId: entry.patientId,
+        patientName: entry.patientName,
+        token: entry.token,
+        status: entry.status,
+        joinedAt: entry.joinedAt,
+      }))
+  );
+  rows.sort((a, b) => new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime());
+  res.json(rows);
 };
 
 const postNext: RequestHandler = async (req, res) => {
@@ -58,8 +105,10 @@ const postAbsent: RequestHandler = async (req, res) => {
   res.json(await buildQueueSnapshot(doctorId));
 };
 
-router.get("/:doctorId", getQueue);
-router.post("/:doctorId/next", requireAuth, requireRole("doctor", "admin"), postNext);
-router.post("/:doctorId/absent", requireAuth, requireRole("doctor", "admin"), postAbsent);
+router.get("/admin/all", requireAuth, requireRole("admin"), getAllDoctorQueues);
+router.get("/admin/active", requireAuth, requireRole("admin"), getActiveQueue);
+router.get("/:doctorId", requireAuth, getQueue);
+router.post("/:doctorId/next", requireAuth, requireRole("admin"), postNext);
+router.post("/:doctorId/absent", requireAuth, requireRole("admin"), postAbsent);
 
 export default router;

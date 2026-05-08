@@ -1,5 +1,5 @@
 import { Router, type RequestHandler } from "express";
-import type { AuthResponse, RegisterBody, LoginBody, UserRole } from "@shared/api";
+import type { AuthResponse, RegisterBody, LoginBody, RegisterableRole } from "@shared/api";
 import { requireAuth } from "../middleware/auth";
 import {
   createUser,
@@ -19,12 +19,11 @@ const register: RequestHandler = async (req, res) => {
     res.status(400).json({ error: "email, password, and name are required" });
     return;
   }
-  let role: UserRole = "patient";
-  if (requestedRole && requestedRole !== "patient") {
-    if (process.env.ALLOW_STAFF_REGISTER === "true") {
-      role = requestedRole;
-    }
+  if (requestedRole !== "patient" && requestedRole !== "admin") {
+    res.status(400).json({ error: "Select Patient or Admin" });
+    return;
   }
+  const role: RegisterableRole = requestedRole;
   const existing = await User.findOne({ email: email.toLowerCase().trim() });
   if (existing) {
     res.status(409).json({ error: "Email already registered" });
@@ -51,6 +50,10 @@ const login: RequestHandler = async (req, res) => {
   const user = await findUserByEmailWithSecret(body.email);
   if (!user || !(await verifyPassword(body.password, user.passwordHash))) {
     res.status(401).json({ error: "Invalid email or password" });
+    return;
+  }
+  if (user.role === "doctor") {
+    res.status(403).json({ error: "Doctor portal is not enabled. Sign in as an admin." });
     return;
   }
   const token = signToken(user._id.toString(), user.role);
