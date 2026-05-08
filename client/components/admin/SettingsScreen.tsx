@@ -1,172 +1,68 @@
-import { useState } from "react";
-import { toast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { apiFetch } from "@/lib/api";
+import type { DoctorListItem } from "@shared/api";
+import { toast } from "sonner";
 
 export function SettingsScreen() {
-  const [hospitalName, setHospitalName] = useState("Riverside Community Hospital");
-  const [hospitalAddress, setHospitalAddress] = useState("1200 Health Way, Metro City");
-  const [hospitalPhone, setHospitalPhone] = useState("+1 (555) 010-0200");
+  const [doctors, setDoctors] = useState<DoctorListItem[]>([]);
 
-  const [slotDurationMins, setSlotDurationMins] = useState(15);
-  const [bufferMins, setBufferMins] = useState(5);
-  const [smsEnabled, setSmsEnabled] = useState(true);
-
-  const [adminEmail, setAdminEmail] = useState("admin@healthqueue.demo");
-  const [newPassword, setNewPassword] = useState("");
-
-  const handleSave = () => {
-    toast({
-      title: "Settings saved",
-      description: "Your changes have been stored locally for this demo session.",
-    });
-  };
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await apiFetch<DoctorListItem[]>("/api/doctors");
+        if (!cancelled) setDoctors(list);
+      } catch {
+        if (!cancelled) toast.error("Could not load doctors.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className="space-y-6">
-      <p className="text-slate-600">Configure hospital profile, queue behavior, and account preferences.</p>
+      <p className="text-slate-600">Doctor directory and department assignments.</p>
 
-      <Tabs defaultValue="hospital" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 h-auto sm:h-10 gap-1 sm:gap-0 bg-slate-100 p-1">
-          <TabsTrigger value="hospital" className="text-xs sm:text-sm">
-            Hospital Profile
-          </TabsTrigger>
-          <TabsTrigger value="queue" className="text-xs sm:text-sm">
-            Queue Rules
-          </TabsTrigger>
-          <TabsTrigger value="account" className="text-xs sm:text-sm">
-            Account
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="hospital" className="mt-6">
-          <Card className="border-slate-200 shadow-sm bg-white max-w-2xl">
-            <CardHeader>
-              <CardTitle>Hospital profile</CardTitle>
-              <CardDescription>Shown on receipts and patient notifications (demo placeholders).</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="hospital-name">Hospital name</Label>
-                <Input
-                  id="hospital-name"
-                  value={hospitalName}
-                  onChange={(e) => setHospitalName(e.target.value)}
-                  className="border-slate-200 bg-white"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="hospital-address">Address</Label>
-                <Input
-                  id="hospital-address"
-                  value={hospitalAddress}
-                  onChange={(e) => setHospitalAddress(e.target.value)}
-                  className="border-slate-200 bg-white"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="hospital-phone">Phone</Label>
-                <Input
-                  id="hospital-phone"
-                  type="tel"
-                  value={hospitalPhone}
-                  onChange={(e) => setHospitalPhone(e.target.value)}
-                  className="border-slate-200 bg-white"
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="queue" className="mt-6">
-          <Card className="border-slate-200 shadow-sm bg-white max-w-2xl">
-            <CardHeader>
-              <CardTitle>Queue rules</CardTitle>
-              <CardDescription>Timing and notification defaults for the waiting list.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="slot-duration">Average slot duration (mins)</Label>
-                <Input
-                  id="slot-duration"
-                  type="number"
-                  min={5}
-                  max={120}
-                  value={slotDurationMins}
-                  onChange={(e) => setSlotDurationMins(Number(e.target.value) || 0)}
-                  className="border-slate-200 bg-white max-w-xs"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="buffer-time">Buffer time between patients (mins)</Label>
-                <Input
-                  id="buffer-time"
-                  type="number"
-                  min={0}
-                  max={60}
-                  value={bufferMins}
-                  onChange={(e) => setBufferMins(Number(e.target.value) || 0)}
-                  className="border-slate-200 bg-white max-w-xs"
-                />
-              </div>
-              <div className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 p-4">
-                <div className="space-y-0.5">
-                  <Label htmlFor="sms-toggle" className="text-base font-medium text-slate-900">
-                    Enable automated SMS notifications
-                  </Label>
-                  <p className="text-sm text-slate-500">Patients receive texts when their turn is near.</p>
-                </div>
-                <Switch id="sms-toggle" checked={smsEnabled} onCheckedChange={setSmsEnabled} />
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="account" className="mt-6">
-          <Card className="border-slate-200 shadow-sm bg-white max-w-2xl">
-            <CardHeader>
-              <CardTitle>Account</CardTitle>
-              <CardDescription>Administrator sign-in details (not connected to a real backend).</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="admin-email">Admin email</Label>
-                <Input
-                  id="admin-email"
-                  type="email"
-                  autoComplete="email"
-                  value={adminEmail}
-                  onChange={(e) => setAdminEmail(e.target.value)}
-                  className="border-slate-200 bg-white"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="new-password">New password</Label>
-                <Input
-                  id="new-password"
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder="••••••••"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="border-slate-200 bg-white"
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-2 border-t border-slate-200">
-        <Button type="button" className="bg-primary hover:bg-primary/90 text-primary-foreground w-full sm:w-auto" onClick={handleSave}>
-          Save Changes
-        </Button>
-        <p className="text-xs text-slate-500">Saves are mocked in the browser only.</p>
-      </div>
+      <Card className="border-slate-200 bg-white">
+        <CardHeader>
+          <CardTitle>Doctors and Departments</CardTitle>
+          <CardDescription>Used by appointment booking filters and queue grouping.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">Doctor</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">Department</th>
+                </tr>
+              </thead>
+              <tbody>
+                {doctors.length === 0 ? (
+                  <tr>
+                    <td colSpan={2} className="px-4 py-8 text-center text-slate-500">
+                      No doctors found.
+                    </td>
+                  </tr>
+                ) : (
+                  doctors.map((doctor) => (
+                    <tr key={doctor.id} className="border-b border-slate-100">
+                      <td className="px-4 py-3 font-medium text-slate-900">{doctor.name}</td>
+                      <td className="px-4 py-3">
+                        <Badge className="bg-blue-100 text-primary border-0">{doctor.specialization}</Badge>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

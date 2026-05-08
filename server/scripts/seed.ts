@@ -22,6 +22,30 @@ async function main() {
       specialization: "General Medicine",
     },
     {
+      email: "dr.priya@healthqueue.demo",
+      name: "Priya Nair",
+      role: "doctor" as const,
+      specialization: "Dermatology",
+    },
+    {
+      email: "dr.arjun@healthqueue.demo",
+      name: "Arjun Mehta",
+      role: "doctor" as const,
+      specialization: "ENT",
+    },
+    {
+      email: "dr.nisha@healthqueue.demo",
+      name: "Nisha Rao",
+      role: "doctor" as const,
+      specialization: "Ophthalmology",
+    },
+    {
+      email: "dr.vikram@healthqueue.demo",
+      name: "Vikram Iyer",
+      role: "doctor" as const,
+      specialization: "Neurology",
+    },
+    {
       email: "admin@healthqueue.demo",
       name: "Queue Admin",
       role: "admin" as const,
