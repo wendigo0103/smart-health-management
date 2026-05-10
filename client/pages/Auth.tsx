@@ -2,9 +2,16 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Mail } from "lucide-react";
+import { Mail, ShieldCheck, UserRound } from "lucide-react";
 import { apiFetch, setAuthSession, ApiError } from "@/lib/api";
 import type { AuthResponse, LoginBody, RegisterBody } from "@shared/api";
 import { toast } from "sonner";
@@ -182,21 +189,33 @@ export default function Auth() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Register as</label>
-                    <select
-                      name="role"
+                    <Select
                       value={formData.role}
-                      onChange={(e) =>
+                      onValueChange={(value: "patient" | "admin") =>
                         setFormData((prev) => ({
                           ...prev,
-                          role: e.target.value as "patient" | "admin",
+                          role: value,
                         }))
                       }
-                      required
-                      className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
                     >
-                      <option value="patient">Patient</option>
-                      <option value="admin">Admin</option>
-                    </select>
+                      <SelectTrigger className="h-12 border-gray-300 bg-white text-left shadow-sm focus:ring-primary">
+                        <SelectValue placeholder="Select account type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="patient" className="py-3">
+                          <span className="flex items-center gap-2">
+                            <UserRound size={16} className="text-primary" />
+                            <span>Patient</span>
+                          </span>
+                        </SelectItem>
+                        <SelectItem value="admin" className="py-3">
+                          <span className="flex items-center gap-2">
+                            <ShieldCheck size={16} className="text-primary" />
+                            <span>Admin</span>
+                          </span>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div>

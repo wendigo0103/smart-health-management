@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { apiFetch, ApiError, getStoredUser } from "@/lib/api";
 import type { AppointmentDto, DoctorDailyStats } from "@shared/api";
 import { toast } from "sonner";
-import { Pencil, XCircle } from "lucide-react";
+import { XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,18 +22,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-export type AppointmentStatus = "Confirmed" | "Pending" | "Cancelled" | "Completed";
+export type AppointmentStatus = "Confirmed" | "Pending" | "Cancelled" | "Completed" | "Missed";
 
 export interface AppointmentRow {
   id: string;
@@ -56,6 +48,7 @@ function mapDtoToRow(a: AppointmentDto): AppointmentRow {
     pending: "Pending",
     cancelled: "Cancelled",
     completed: "Completed",
+    missed: "Missed",
   };
   return {
     id: a.id,
@@ -77,6 +70,8 @@ function statusBadgeClass(status: AppointmentStatus) {
       return "bg-slate-200 text-slate-700 border-0";
     case "Completed":
       return "bg-blue-100 text-primary border-0";
+    case "Missed":
+      return "bg-red-100 text-red-700 border-0";
     default:
       return "border-0";
   }
@@ -87,7 +82,6 @@ export function AppointmentsScreen() {
   const [rows, setRows] = useState<AppointmentRow[]>([]);
   const [search, setSearch] = useState("");
   const [doctorFilter, setDoctorFilter] = useState<string>(ALL_DOCTORS_VALUE);
-  const [editRow, setEditRow] = useState<AppointmentRow | null>(null);
   const [doctorStats, setDoctorStats] = useState<DoctorDailyStats[]>([]);
 
   useEffect(() => {
@@ -151,6 +145,11 @@ export function AppointmentsScreen() {
     <div className="space-y-6">
       <p className="text-slate-600">Search, filter, and manage scheduled visits.</p>
 
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900">Today's doctor workload</h2>
+        <p className="text-sm text-slate-500">Completed and remaining counts for appointments scheduled today.</p>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {doctorStats.map((stat) => (
           <Card key={stat.doctorId} className="border-slate-200 bg-white">
@@ -159,11 +158,11 @@ export function AppointmentsScreen() {
               <p className="text-sm text-slate-500 mb-4">{stat.doctorDepartment}</p>
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-md bg-blue-50 p-3">
-                  <p className="text-xs text-slate-600">Completed</p>
+                  <p className="text-xs text-slate-600">Completed today</p>
                   <p className="text-2xl font-bold text-primary">{stat.completedAppointments}</p>
                 </div>
                 <div className="rounded-md bg-amber-50 p-3">
-                  <p className="text-xs text-slate-600">Remaining</p>
+                  <p className="text-xs text-slate-600">Remaining today</p>
                   <p className="text-2xl font-bold text-amber-700">{stat.remainingAppointments}</p>
                 </div>
               </div>
@@ -242,16 +241,6 @@ export function AppointmentsScreen() {
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="text-slate-600 hover:text-primary"
-                            aria-label={`Edit appointment ${row.token}`}
-                            onClick={() => setEditRow(row)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
                             className="text-slate-600 hover:text-destructive disabled:opacity-40"
                             aria-label={`Cancel appointment ${row.token}`}
                             disabled={row.status === "Cancelled"}
@@ -269,50 +258,6 @@ export function AppointmentsScreen() {
           </div>
         </CardContent>
       </Card>
-
-      <Dialog open={editRow !== null} onOpenChange={(open) => !open && setEditRow(null)}>
-        <DialogContent className="border-slate-200">
-          <DialogHeader>
-            <DialogTitle>Appointment details</DialogTitle>
-            <DialogDescription>
-              Review-only preview for demo. Connect to your API to edit fields.
-            </DialogDescription>
-          </DialogHeader>
-          {editRow && (
-            <dl className="grid grid-cols-1 gap-3 text-sm">
-              <div className="flex justify-between gap-4 border-b border-slate-100 pb-2">
-                <dt className="text-slate-500">Token</dt>
-                <dd className="font-medium text-slate-900">{editRow.token}</dd>
-              </div>
-              <div className="flex justify-between gap-4 border-b border-slate-100 pb-2">
-                <dt className="text-slate-500">Patient</dt>
-                <dd className="font-medium text-slate-900">{editRow.patientName}</dd>
-              </div>
-              <div className="flex justify-between gap-4 border-b border-slate-100 pb-2">
-                <dt className="text-slate-500">Time</dt>
-                <dd className="font-medium text-slate-900">{editRow.appointmentTime}</dd>
-              </div>
-              <div className="flex justify-between gap-4 border-b border-slate-100 pb-2">
-                <dt className="text-slate-500">Doctor</dt>
-                <dd className="font-medium text-slate-900">{editRow.doctor}</dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-slate-500">Status</dt>
-                <dd>
-                  <Badge className={cn("text-xs font-semibold", statusBadgeClass(editRow.status))}>
-                    {editRow.status}
-                  </Badge>
-                </dd>
-              </div>
-            </dl>
-          )}
-          <DialogFooter>
-            <Button type="button" onClick={() => setEditRow(null)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

@@ -1,7 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiFetch, ApiError } from "@/lib/api";
-import type { BookedSlotsResponse, CreateAppointmentResponse, DoctorListItem } from "@shared/api";
+import {
+  BOOKING_WINDOW_DAYS,
+  CLINIC_TIME_SLOTS,
+  type BookedSlotsResponse,
+  type CreateAppointmentResponse,
+  type DoctorListItem,
+} from "@shared/api";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,6 +50,16 @@ function buildScheduledAtIso(dateValue: string, timeLabel: string): string {
   return parsed.toISOString();
 }
 
+function addDays(date: Date, days: number): Date {
+  const copy = new Date(date);
+  copy.setDate(copy.getDate() + days);
+  return copy;
+}
+
+function slotDate(dateValue: string, timeLabel: string): Date {
+  return new Date(`${dateValue}T${labelTo24Hour(timeLabel)}:00`);
+}
+
 export default function BookAppointment() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
@@ -56,7 +72,9 @@ export default function BookAppointment() {
   const [apiDoctors, setApiDoctors] = useState<DoctorListItem[]>([]);
   const [doctorsLoading, setDoctorsLoading] = useState(true);
   const [bookedSlots, setBookedSlots] = useState<string[]>([]);
-  const todayValue = toDateInputValue(new Date());
+  const now = new Date();
+  const todayValue = toDateInputValue(now);
+  const maxBookingDateValue = toDateInputValue(addDays(now, BOOKING_WINDOW_DAYS - 1));
 
   useEffect(() => {
     let cancelled = false;
@@ -134,9 +152,9 @@ export default function BookAppointment() {
     rating: 5,
   }));
 
-  const timeSlots = ["9:00 AM", "9:30 AM", "10:00 AM", "10:30 AM", "11:00 AM", "2:00 PM", "2:30 PM", "3:00 PM"];
+  const timeSlots = CLINIC_TIME_SLOTS;
 
-  const dates = Array.from({ length: 6 }, (_, i) => {
+  const dates = Array.from({ length: BOOKING_WINDOW_DAYS }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() + i);
     return {
@@ -424,7 +442,7 @@ export default function BookAppointment() {
                   {/* Date Selection */}
                   <div className="mb-6">
                     <label className="block text-sm font-medium text-gray-700 mb-3">Choose Date</label>
-                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-7 gap-2">
                       {dates.map((date) => (
                         <button
                           key={date.value}
@@ -442,10 +460,14 @@ export default function BookAppointment() {
                     <input
                       type="date"
                       min={todayValue}
+                      max={maxBookingDateValue}
                       value={selectedDate ?? ""}
                       onChange={(e) => setSelectedDate(e.target.value)}
                       className="mt-3 h-10 rounded-md border border-gray-200 px-3 text-sm"
                     />
+                    <p className="mt-2 text-xs text-gray-500">
+                      Appointments can be booked up to {BOOKING_WINDOW_DAYS} days in advance.
+                    </p>
                   </div>
 
                   {/* Time Selection */}
@@ -454,13 +476,15 @@ export default function BookAppointment() {
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {timeSlots.map((time) => {
                         const isBooked = bookedSlots.includes(labelTo24Hour(time));
+                        const isPast = selectedDate ? slotDate(selectedDate, time).getTime() <= Date.now() : false;
+                        const disabled = isBooked || isPast;
                         return (
                         <button
                           key={time}
                           onClick={() => setSelectedTime(time)}
-                          disabled={isBooked}
+                          disabled={disabled}
                           className={`py-3 px-4 rounded-lg border-2 font-medium transition-all text-center ${
-                            isBooked
+                            disabled
                               ? "border-gray-100 bg-gray-100 text-gray-400 cursor-not-allowed"
                               : selectedTime === time
                               ? "border-primary bg-blue-100 text-primary"
@@ -468,6 +492,7 @@ export default function BookAppointment() {
                           }`}
                         >
                           {time}
+                          {isPast && <span className="block text-[10px] font-normal">Past</span>}
                           {isBooked && <span className="block text-[10px] font-normal">Booked</span>}
                         </button>
                         );
