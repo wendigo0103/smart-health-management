@@ -1,12 +1,15 @@
-import { Bell, LogOut, User } from "lucide-react";
+import { useState } from "react";
+import { Bell, CalendarClock, CheckCircle2, LogOut, User } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { clearAuthSession, getStoredUser } from "@/lib/api";
 
 export default function Navbar() {
   const navigate = useNavigate();
   const stored = getStoredUser();
   const patientName = stored?.name ?? "Guest";
+  const [hasUnread, setHasUnread] = useState(true);
 
   const handleLogout = () => {
     clearAuthSession();
@@ -25,14 +28,50 @@ export default function Navbar() {
           </Link>
 
           <div className="flex items-center gap-4">
-            <button
-              type="button"
-              className="relative p-2 text-gray-600 hover:text-primary hover:bg-blue-50 rounded-lg transition-colors"
-              aria-label="Notifications"
-            >
-              <Bell size={20} />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-            </button>
+            <Popover onOpenChange={(open) => open && setHasUnread(false)}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="relative p-2 text-gray-600 hover:text-primary hover:bg-blue-50 rounded-lg transition-colors"
+                  aria-label="Notifications"
+                >
+                  <Bell size={20} />
+                  {hasUnread && (
+                    <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                  )}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-80 p-0">
+                <div className="border-b border-gray-100 px-4 py-3">
+                  <p className="font-semibold text-gray-900">Notifications</p>
+                  <p className="text-xs text-gray-500">Appointment and queue updates appear here.</p>
+                </div>
+                <div className="divide-y divide-gray-100">
+                  <div className="flex gap-3 px-4 py-3">
+                    <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-blue-50">
+                      <CalendarClock size={16} className="text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">Booking reminders</p>
+                      <p className="text-xs text-gray-500">
+                        Confirmations, cancellations, and schedule changes will be listed here.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 px-4 py-3">
+                    <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50">
+                      <CheckCircle2 size={16} className="text-emerald-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">Queue alerts</p>
+                      <p className="text-xs text-gray-500">
+                        When your turn is near, the live queue will notify you here.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
 
             <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg">
               <User size={18} className="text-primary" />

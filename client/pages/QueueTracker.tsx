@@ -86,6 +86,21 @@ export default function QueueTracker() {
       if (snap.doctorId === doctorId) {
         setSnapshot(snap);
         const activeToken = snap.currentPatientToken;
+        if (
+          notificationsEnabled &&
+          (snap.doctorStatus === "delayed" || snap.doctorStatus === "unavailable") &&
+          document.hidden &&
+          "Notification" in window &&
+          Notification.permission === "granted"
+        ) {
+          new Notification("HealthQueue", {
+            body:
+              snap.statusMessage ||
+              (snap.doctorStatus === "delayed"
+                ? `Doctor is running ${snap.delayMinutes} minutes late.`
+                : "Doctor is currently unavailable."),
+          });
+        }
         if (notificationsEnabled && activeToken === myToken && document.hidden) {
           document.title = `Your turn: ${myToken}`;
           if ("Notification" in window && Notification.permission === "granted") {
@@ -134,8 +149,13 @@ export default function QueueTracker() {
     if (myEntry.status === "called") label = "You're being seen";
     if (myEntry.status === "completed") label = "Completed";
     if (myEntry.status === "delayed") label = "Delayed";
-    const est = ahead * snapshot.estimatedWaitPerPatient;
-    return { patientsAhead: ahead, statusLabel: label, estWaitMins: est || snapshot.estimatedWaitPerPatient };
+    const delay = snapshot.doctorStatus === "delayed" ? snapshot.delayMinutes : 0;
+    const est = ahead * snapshot.estimatedWaitPerPatient + delay;
+    return {
+      patientsAhead: ahead,
+      statusLabel: label,
+      estWaitMins: est || snapshot.estimatedWaitPerPatient + delay,
+    };
   }, [snapshot, myToken, myEntry]);
 
   const queueListUi = useMemo(() => {
@@ -174,6 +194,36 @@ export default function QueueTracker() {
           <h1 className="text-3xl font-bold text-gray-900">Live Queue Status</h1>
           <p className="text-gray-600 mt-2">Real-time appointment queue tracking</p>
         </div>
+
+        {snapshot && snapshot.doctorStatus !== "on-time" && (
+          <Card
+            className={`mb-6 border-2 ${
+              snapshot.doctorStatus === "unavailable"
+                ? "border-red-200 bg-red-50"
+                : "border-amber-200 bg-amber-50"
+            }`}
+          >
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle
+                  size={22}
+                  className={snapshot.doctorStatus === "unavailable" ? "text-red-600" : "text-amber-700"}
+                />
+                <div>
+                  <p className="font-semibold text-gray-900">
+                    {snapshot.doctorStatus === "unavailable"
+                      ? "Doctor unavailable"
+                      : `Doctor delayed by ${snapshot.delayMinutes} minutes`}
+                  </p>
+                  <p className="text-sm text-gray-700 mt-1">
+                    {snapshot.statusMessage ||
+                      "Clinic staff will keep this queue updated as the schedule changes."}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="bg-gradient-to-br from-blue-50 to-white border-2 border-primary shadow-lg mb-8">
           <CardContent className="p-8 sm:p-12">
@@ -229,6 +279,11 @@ export default function QueueTracker() {
                 <p className="text-center text-gray-600 text-sm mt-1">
                   Estimated time: <span className="font-semibold">~{estWaitMins} minutes</span>
                 </p>
+                {snapshot?.doctorStatus === "unavailable" && (
+                  <p className="text-center text-red-700 text-sm mt-2 font-medium">
+                    Please wait for clinic staff to reschedule or reopen this queue.
+                  </p>
+                )}
               </div>
             </div>
           </CardContent>

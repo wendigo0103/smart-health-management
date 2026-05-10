@@ -5,6 +5,23 @@
 export type UserRole = "patient" | "doctor" | "admin";
 export type RegisterableRole = "patient" | "admin";
 
+export const BOOKING_WINDOW_DAYS = 14;
+export const CLINIC_TIME_SLOTS = [
+  "9:00 AM",
+  "9:30 AM",
+  "10:00 AM",
+  "10:30 AM",
+  "11:00 AM",
+  "11:30 AM",
+  "2:00 PM",
+  "2:30 PM",
+  "3:00 PM",
+  "3:30 PM",
+  "4:00 PM",
+  "4:30 PM",
+  "5:00 PM",
+] as const;
+
 export interface DemoResponse {
   message: string;
 }
@@ -26,7 +43,7 @@ export interface AuthResponse {
   user: UserPublic;
 }
 
-export type AppointmentStatusApi = "confirmed" | "pending" | "cancelled" | "completed";
+export type AppointmentStatusApi = "confirmed" | "pending" | "cancelled" | "completed" | "missed";
 
 export interface AppointmentDto {
   id: string;
@@ -42,8 +59,10 @@ export interface AppointmentDto {
 }
 
 export type QueueWaitingStatus = "waiting" | "called" | "completed" | "delayed";
+export type DoctorAvailabilityStatus = "on-time" | "delayed" | "unavailable";
 
 export interface QueueWaitingEntryDto {
+  appointmentId?: string;
   patientId: string;
   token: string;
   status: QueueWaitingStatus;
@@ -56,6 +75,15 @@ export interface QueueSnapshot {
   currentPatientToken: string;
   waitingList: QueueWaitingEntryDto[];
   estimatedWaitPerPatient: number;
+  doctorStatus: DoctorAvailabilityStatus;
+  delayMinutes: number;
+  statusMessage: string;
+}
+
+export interface UpdateDoctorStatusBody {
+  status: DoctorAvailabilityStatus;
+  delayMinutes?: number;
+  statusMessage?: string;
 }
 
 /** Server → client after queue mutations */
