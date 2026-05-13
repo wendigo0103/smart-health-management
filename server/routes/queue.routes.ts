@@ -10,6 +10,7 @@ import {
 } from "../services/queue.service";
 import { broadcastQueueUpdate } from "../services/realtime.service";
 import { User } from "../models/User";
+import { HOSPITALS } from "@shared/api";
 
 const router = Router();
 
@@ -39,6 +40,11 @@ const getAllDoctorQueues: RequestHandler = async (_req, res) => {
         ...snapshot,
         doctorName: doctor.doctorProfile?.displayName || doctor.name,
         doctorDepartment: doctor.doctorProfile?.specialization || "General",
+        hospitalId: doctor.hospitalId,
+
+        hospitalName:
+          HOSPITALS.find((h) => h.id === doctor.hospitalId)?.name ||
+          "Unknown Hospital",
       };
     })
   );
