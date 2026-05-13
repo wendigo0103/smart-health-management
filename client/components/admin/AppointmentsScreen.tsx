@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { apiFetch, ApiError, getStoredUser } from "@/lib/api";
+import { getQueueSocket } from "@/lib/socket";
 import type { AppointmentDto, DoctorDailyStats } from "@shared/api";
 import { toast } from "sonner";
 import { XCircle } from "lucide-react";
@@ -84,6 +85,15 @@ export function AppointmentsScreen() {
   const [doctorFilter, setDoctorFilter] = useState<string>(ALL_DOCTORS_VALUE);
   const [doctorStats, setDoctorStats] = useState<DoctorDailyStats[]>([]);
 
+  const loadAppointments = async (cancelled: () => boolean) => {
+    const [list, stats] = await Promise.all([
+      apiFetch<AppointmentDto[]>("/api/appointments"),
+      apiFetch<DoctorDailyStats[]>("/api/appointments/admin/doctor-stats"),
+    ]);
+    if (!cancelled()) setRows(list.map(mapDtoToRow));
+    if (!cancelled()) setDoctorStats(stats);
+  };
+
   useEffect(() => {
     if (!staffUser || staffUser.role !== "admin") {
       return;
@@ -91,18 +101,27 @@ export function AppointmentsScreen() {
     let cancelled = false;
     (async () => {
       try {
-        const [list, stats] = await Promise.all([
-          apiFetch<AppointmentDto[]>("/api/appointments"),
-          apiFetch<DoctorDailyStats[]>("/api/appointments/admin/doctor-stats"),
-        ]);
-        if (!cancelled) setRows(list.map(mapDtoToRow));
-        if (!cancelled) setDoctorStats(stats);
+        await loadAppointments(() => cancelled);
       } catch {
         if (!cancelled) toast.error("Could not load appointments.");
       }
     })();
     return () => {
       cancelled = true;
+    };
+  }, [staffUser]);
+
+  useEffect(() => {
+    if (!staffUser || staffUser.role !== "admin") return;
+    const s = getQueueSocket();
+    if (!s.connected) s.connect();
+    s.emit("watchAppointments", undefined);
+    const refresh = () => {
+      void loadAppointments(() => false);
+    };
+    s.on("appointmentBooked", refresh);
+    return () => {
+      s.off("appointmentBooked", refresh);
     };
   }, [staffUser]);
 

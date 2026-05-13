@@ -7,6 +7,7 @@ import MainLayout from "@/components/layout/MainLayout";
 import { Bell, BellOff, LogOut, Clock, Users, AlertCircle } from "lucide-react";
 import { apiFetch, getToken } from "@/lib/api";
 import { getQueueSocket } from "@/lib/socket";
+import { requestNotificationPermission, showLocalQueueNotification } from "@/lib/pushNotifications";
 import type { QueueSnapshot, QueueWaitingEntryDto } from "@shared/api";
 import { toast } from "sonner";
 
@@ -93,32 +94,38 @@ export default function QueueTracker() {
           "Notification" in window &&
           Notification.permission === "granted"
         ) {
-          new Notification("HealthQueue", {
-            body:
+          void showLocalQueueNotification(
+            "HealthQueue",
               snap.statusMessage ||
               (snap.doctorStatus === "delayed"
                 ? `Doctor is running ${snap.delayMinutes} minutes late.`
-                : "Doctor is currently unavailable."),
-          });
+                : "Doctor is currently unavailable.")
+          );
         }
         if (notificationsEnabled && activeToken === myToken && document.hidden) {
           document.title = `Your turn: ${myToken}`;
           if ("Notification" in window && Notification.permission === "granted") {
-            new Notification("HealthQueue", { body: `Token ${myToken}, please proceed to consultation.` });
+            void showLocalQueueNotification("HealthQueue", `Token ${myToken}, please proceed to consultation.`);
           }
         }
       }
     };
+    const onNotification = (payload: { title?: string; body?: string }) => {
+      if (!notificationsEnabled || !document.hidden || !("Notification" in window) || Notification.permission !== "granted") return;
+      void showLocalQueueNotification(payload.title || "HealthQueue", payload.body || "Queue updated.");
+    };
     s.on("queueUpdated", onUpd);
+    s.on("queueNotification", onNotification);
     return () => {
       s.off("queueUpdated", onUpd);
+      s.off("queueNotification", onNotification);
       document.title = "HealthQueue";
     };
   }, [doctorId, myToken, notificationsEnabled]);
 
   const toggleNotifications = async () => {
-    if (!notificationsEnabled && "Notification" in window && Notification.permission === "default") {
-      await Notification.requestPermission();
+    if (!notificationsEnabled) {
+      await requestNotificationPermission();
     }
     setNotificationsEnabled((v) => !v);
   };

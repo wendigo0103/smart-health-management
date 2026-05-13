@@ -37,8 +37,11 @@ export function userToPublic(user: IUser): UserPublic {
       ? {
           displayName: user.doctorProfile.displayName,
           specialization: user.doctorProfile.specialization,
+          rating: user.doctorProfile.rating,
+          averageDelayMinutes: user.doctorProfile.averageDelayMinutes,
         }
       : undefined,
+    hospitalId: user.hospitalId,
   };
 }
 
@@ -48,6 +51,7 @@ export async function createUser(data: {
   name: string;
   phone?: string;
   role: UserRole;
+  hospitalId?: string;
 }): Promise<IUser> {
   const passwordHash = await hashPassword(data.password);
   const doc = await User.create({
@@ -56,6 +60,7 @@ export async function createUser(data: {
     name: data.name,
     phone: data.phone ?? "",
     role: data.role,
+    hospitalId: data.hospitalId,
     doctorProfile:
       data.role === "doctor"
         ? { displayName: data.name, specialization: "General" }

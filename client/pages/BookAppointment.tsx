@@ -4,6 +4,7 @@ import { apiFetch, ApiError } from "@/lib/api";
 import {
   BOOKING_WINDOW_DAYS,
   CLINIC_TIME_SLOTS,
+  HOSPITALS,
   type BookedSlotsResponse,
   type CreateAppointmentResponse,
   type DoctorListItem,
@@ -12,6 +13,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import MainLayout from "@/components/layout/MainLayout";
 import {
   Heart,
@@ -63,6 +65,7 @@ function slotDate(dateValue: string, timeLabel: string): Date {
 export default function BookAppointment() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
+  const [selectedHospital, setSelectedHospital] = useState<string>(HOSPITALS[0]?.id ?? "");
   const [selectedDepartment, setSelectedDepartment] = useState<string | null>(null);
   const [selectedDoctor, setSelectedDoctor] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -71,7 +74,9 @@ export default function BookAppointment() {
   const [bookingDoctorId, setBookingDoctorId] = useState<string | null>(null);
   const [apiDoctors, setApiDoctors] = useState<DoctorListItem[]>([]);
   const [doctorsLoading, setDoctorsLoading] = useState(true);
-  const [bookedSlots, setBookedSlots] = useState<string[]>([]);
+  const [doctorBookedSlots, setDoctorBookedSlots] = useState<string[]>([]);
+  const [patientBookedSlots, setPatientBookedSlots] = useState<string[]>([]);
+  const [submitting, setSubmitting] = useState(false);
   const now = new Date();
   const todayValue = toDateInputValue(now);
   const maxBookingDateValue = toDateInputValue(addDays(now, BOOKING_WINDOW_DAYS - 1));
@@ -79,7 +84,7 @@ export default function BookAppointment() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!selectedDepartment) {
+      if (!selectedHospital || !selectedDepartment) {
         setApiDoctors([]);
         setDoctorsLoading(false);
         return;
@@ -89,7 +94,7 @@ export default function BookAppointment() {
         const departmentName =
           departments.find((d) => d.id === selectedDepartment)?.name ?? selectedDepartment;
         const list = await apiFetch<DoctorListItem[]>(
-          `/api/doctors?department=${encodeURIComponent(departmentName)}`
+          `/api/doctors?department=${encodeURIComponent(departmentName)}&hospitalId=${encodeURIComponent(selectedHospital)}`
         );
         if (!cancelled) setApiDoctors(list);
       } catch {
@@ -104,15 +109,16 @@ export default function BookAppointment() {
     return () => {
       cancelled = true;
     };
-  }, [selectedDepartment]);
+  }, [selectedDepartment, selectedHospital]);
 
   useEffect(() => {
     setSelectedDoctor(null);
-  }, [selectedDepartment]);
+  }, [selectedDepartment, selectedHospital]);
 
   useEffect(() => {
     if (!selectedDoctor || !selectedDate) {
-      setBookedSlots([]);
+      setDoctorBookedSlots([]);
+      setPatientBookedSlots([]);
       return;
     }
     let cancelled = false;
@@ -121,9 +127,15 @@ export default function BookAppointment() {
         const res = await apiFetch<BookedSlotsResponse>(
           `/api/appointments/booked-slots?doctorId=${selectedDoctor}&date=${selectedDate}`
         );
-        if (!cancelled) setBookedSlots(res.slots);
+        if (!cancelled) {
+          setDoctorBookedSlots(res.doctorBookedSlots ?? res.slots);
+          setPatientBookedSlots(res.patientBookedSlots ?? []);
+        }
       } catch {
-        if (!cancelled) setBookedSlots([]);
+        if (!cancelled) {
+          setDoctorBookedSlots([]);
+          setPatientBookedSlots([]);
+        }
       }
     })();
     return () => {
@@ -149,7 +161,8 @@ export default function BookAppointment() {
     name: d.name,
     specialization: d.specialization,
     nextAvailable: d.nextAvailableLabel || "Flexible",
-    rating: 5,
+    rating: d.rating ?? 5,
+    averageDelayMinutes: d.averageDelayMinutes ?? 0,
   }));
 
   const timeSlots = CLINIC_TIME_SLOTS;
@@ -165,11 +178,12 @@ export default function BookAppointment() {
 
   const handleConfirmBooking = async () => {
     if (!selectedDoctor || !selectedDate || !selectedTime) return;
+    setSubmitting(true);
     try {
       const scheduledAt = buildScheduledAtIso(selectedDate, selectedTime);
       const res = await apiFetch<CreateAppointmentResponse>("/api/appointments", {
         method: "POST",
-        body: JSON.stringify({ doctorId: selectedDoctor, scheduledAt }),
+        body: JSON.stringify({ doctorId: selectedDoctor, scheduledAt, hospitalId: selectedHospital }),
       });
       setBookingToken(res.appointment.token);
       setBookingDoctorId(selectedDoctor);
@@ -181,6 +195,8 @@ export default function BookAppointment() {
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : "Booking failed";
       toast.error(msg);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -190,6 +206,7 @@ export default function BookAppointment() {
 
   const department = departments.find((d) => d.id === selectedDepartment);
   const doctor = doctors.find((d) => d.id === selectedDoctor);
+  const hospital = HOSPITALS.find((h) => h.id === selectedHospital);
 
   return (
     <MainLayout>
@@ -204,7 +221,7 @@ export default function BookAppointment() {
         {!bookingToken && (
           <div className="mb-8">
             <div className="flex items-center justify-between">
-              {[1, 2, 3].map((s) => (
+              {[1, 2, 3, 4].map((s) => (
                 <div key={s} className="flex items-center flex-1">
                   <div
                     className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold transition-all ${
@@ -217,7 +234,7 @@ export default function BookAppointment() {
                   >
                     {s < step ? <CheckCircle size={20} /> : s}
                   </div>
-                  {s < 3 && (
+                  {s < 4 && (
                     <div
                       className={`flex-1 h-1 mx-2 rounded-full transition-all ${
                         s < step ? "bg-success" : "bg-gray-200"
@@ -227,10 +244,11 @@ export default function BookAppointment() {
                 </div>
               ))}
             </div>
-            <div className="flex justify-between mt-3 text-xs font-medium">
-              <span className={step >= 1 ? "text-primary" : "text-gray-400"}>Department</span>
-              <span className={step >= 2 ? "text-primary" : "text-gray-400"}>Doctor</span>
-              <span className={step >= 3 ? "text-primary" : "text-gray-400"}>Date & Time</span>
+            <div className="grid grid-cols-4 mt-3 text-center text-xs font-medium">
+              <span className={step >= 1 ? "text-primary" : "text-gray-400"}>Hospital</span>
+              <span className={step >= 2 ? "text-primary" : "text-gray-400"}>Department</span>
+              <span className={step >= 3 ? "text-primary" : "text-gray-400"}>Doctor</span>
+              <span className={step >= 4 ? "text-primary" : "text-gray-400"}>Date & Time</span>
             </div>
           </div>
         )}
@@ -260,6 +278,10 @@ export default function BookAppointment() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left bg-gray-50 rounded-lg p-6 mb-8">
                     <div>
+                      <p className="text-gray-600 text-sm font-medium">Hospital</p>
+                      <p className="text-gray-900 font-semibold">{hospital?.name}</p>
+                    </div>
+                    <div>
                       <p className="text-gray-600 text-sm font-medium">Department</p>
                       <p className="text-gray-900 font-semibold">{department?.name}</p>
                     </div>
@@ -279,9 +301,7 @@ export default function BookAppointment() {
                     </div>
                   </div>
 
-                  <p className="text-gray-600 text-sm mb-8">
-                    A confirmation has been sent to your email. Please arrive 10 minutes early.
-                  </p>
+                  <p className="text-gray-600 text-sm mb-8">Please arrive 10 minutes early.</p>
 
                   <div className="flex flex-col sm:flex-row gap-3">
                     <Button
@@ -311,8 +331,47 @@ export default function BookAppointment() {
           </div>
         ) : (
           <div>
-            {/* Step 1: Department Selection */}
+            {/* Step 1: Hospital Selection */}
             {step === 1 && (
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900 mb-4">Select Hospital</h2>
+                  <Select value={selectedHospital} onValueChange={setSelectedHospital}>
+                    <SelectTrigger className="bg-white border-gray-200">
+                      <SelectValue placeholder="Choose hospital" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {HOSPITALS.map((h) => (
+                        <SelectItem key={h.id} value={h.id}>
+                          {h.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex justify-between pt-6 border-t border-gray-200">
+                  <Button
+                    onClick={() => navigate("/dashboard")}
+                    variant="outline"
+                    className="gap-2"
+                  >
+                    <ChevronLeft size={18} />
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={() => setStep(2)}
+                    disabled={!selectedHospital}
+                    className="bg-primary hover:bg-primary/90 text-white gap-2"
+                  >
+                    Next <ArrowRight size={18} />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 2: Department Selection */}
+            {step === 2 && (
               <div className="space-y-6">
                 <div>
                   <h2 className="text-xl font-bold text-gray-900 mb-4">Select Department</h2>
@@ -348,15 +407,15 @@ export default function BookAppointment() {
 
                 <div className="flex justify-between pt-6 border-t border-gray-200">
                   <Button
-                    onClick={() => navigate("/dashboard")}
+                    onClick={() => setStep(1)}
                     variant="outline"
                     className="gap-2"
                   >
                     <ChevronLeft size={18} />
-                    Cancel
+                    Back
                   </Button>
                   <Button
-                    onClick={() => setStep(2)}
+                    onClick={() => setStep(3)}
                     disabled={!selectedDepartment}
                     className="bg-primary hover:bg-primary/90 text-white gap-2"
                   >
@@ -366,8 +425,8 @@ export default function BookAppointment() {
               </div>
             )}
 
-            {/* Step 2: Doctor Selection */}
-            {step === 2 && (
+            {/* Step 3: Doctor Selection */}
+            {step === 3 && (
               <div className="space-y-6">
                 <div>
                   <h2 className="text-xl font-bold text-gray-900 mb-2">Select Doctor</h2>
@@ -402,6 +461,7 @@ export default function BookAppointment() {
                             </div>
                             <div className="text-right">
                               <p className="text-sm font-semibold text-gray-900">⭐ {doc.rating}</p>
+                              <p className="text-xs text-gray-500">{doc.averageDelayMinutes}m avg delay</p>
                               {selectedDoctor === doc.id && (
                                 <Badge className="mt-2 bg-primary text-white border-0">Selected</Badge>
                               )}
@@ -415,7 +475,7 @@ export default function BookAppointment() {
 
                 <div className="flex justify-between pt-6 border-t border-gray-200">
                   <Button
-                    onClick={() => setStep(1)}
+                    onClick={() => setStep(2)}
                     variant="outline"
                     className="gap-2"
                   >
@@ -423,7 +483,7 @@ export default function BookAppointment() {
                     Back
                   </Button>
                   <Button
-                    onClick={() => setStep(3)}
+                    onClick={() => setStep(4)}
                     disabled={!selectedDoctor}
                     className="bg-primary hover:bg-primary/90 text-white gap-2"
                   >
@@ -433,8 +493,8 @@ export default function BookAppointment() {
               </div>
             )}
 
-            {/* Step 3: Date & Time Selection */}
-            {step === 3 && (
+            {/* Step 4: Date & Time Selection */}
+            {step === 4 && (
               <div className="space-y-6">
                 <div>
                   <h2 className="text-xl font-bold text-gray-900 mb-4">Select Date & Time</h2>
@@ -475,9 +535,11 @@ export default function BookAppointment() {
                     <label className="block text-sm font-medium text-gray-700 mb-3">Choose Time</label>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {timeSlots.map((time) => {
-                        const isBooked = bookedSlots.includes(labelTo24Hour(time));
+                        const slotKey = labelTo24Hour(time);
+                        const isDoctorBooked = doctorBookedSlots.includes(slotKey);
+                        const isPatientBooked = patientBookedSlots.includes(slotKey);
                         const isPast = selectedDate ? slotDate(selectedDate, time).getTime() <= Date.now() : false;
-                        const disabled = isBooked || isPast;
+                        const disabled = isDoctorBooked || isPatientBooked || isPast;
                         return (
                         <button
                           key={time}
@@ -493,7 +555,10 @@ export default function BookAppointment() {
                         >
                           {time}
                           {isPast && <span className="block text-[10px] font-normal">Past</span>}
-                          {isBooked && <span className="block text-[10px] font-normal">Booked</span>}
+                          {isDoctorBooked && <span className="block text-[10px] font-normal">Booked</span>}
+                          {!isDoctorBooked && isPatientBooked && (
+                            <span className="block text-[10px] font-normal">Already booked</span>
+                          )}
                         </button>
                         );
                       })}
@@ -504,6 +569,10 @@ export default function BookAppointment() {
                 <div className="bg-gray-50 rounded-lg p-4 sm:p-6 border border-gray-200">
                   <h3 className="font-semibold text-gray-900 mb-3">Booking Summary</h3>
                   <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Hospital:</span>
+                      <span className="font-semibold text-gray-900">{hospital?.name}</span>
+                    </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Department:</span>
                       <span className="font-semibold text-gray-900">{department?.name}</span>
@@ -527,7 +596,7 @@ export default function BookAppointment() {
 
                 <div className="flex justify-between pt-6 border-t border-gray-200">
                   <Button
-                    onClick={() => setStep(2)}
+                    onClick={() => setStep(3)}
                     variant="outline"
                     className="gap-2"
                   >
@@ -536,11 +605,11 @@ export default function BookAppointment() {
                   </Button>
                   <Button
                     onClick={() => void handleConfirmBooking()}
-                    disabled={!selectedDate || !selectedTime}
+                    disabled={!selectedDate || !selectedTime || submitting}
                     className="bg-primary hover:bg-primary/90 text-white gap-2"
                   >
                     <CheckCircle size={18} />
-                    Confirm Booking
+                    {submitting ? "Booking..." : bookingToken ? "Booked" : "Confirm Booking"}
                   </Button>
                 </div>
               </div>

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import MainLayout from "@/components/layout/MainLayout";
-import { Calendar, Clock, Stethoscope } from "lucide-react";
+import { Calendar, Clock, Route, Stethoscope } from "lucide-react";
 import { apiFetch, getStoredUser } from "@/lib/api";
 import type { AppointmentDto } from "@shared/api";
 import { toast } from "sonner";
@@ -27,13 +27,23 @@ function statusClass(status: AppointmentDto["status"]) {
 function AppointmentCard({
   appointment,
   onReschedule,
+  onOpenBooking,
 }: {
   appointment: AppointmentDto;
   onReschedule: () => void;
+  onOpenBooking: () => void;
 }) {
   const when = new Date(appointment.scheduledAt);
   return (
-    <Card className="border border-gray-200 shadow-sm">
+    <Card
+      role="button"
+      tabIndex={0}
+      onClick={onOpenBooking}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") onOpenBooking();
+      }}
+      className="border border-gray-200 shadow-sm cursor-pointer hover:border-primary hover:shadow-md transition-all"
+    >
       <CardContent className="p-4 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-3 min-w-0">
@@ -57,7 +67,15 @@ function AppointmentCard({
             {appointment.status}
           </Badge>
           {appointment.status === "missed" && (
-            <Button type="button" size="sm" variant="outline" onClick={onReschedule}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={(e) => {
+                e.stopPropagation();
+                onReschedule();
+              }}
+            >
               Reschedule
             </Button>
           )}
@@ -116,6 +134,10 @@ export default function Dashboard() {
             <Stethoscope size={18} />
             Book Appointment
           </Button>
+          <Button onClick={() => navigate("/queue")} variant="outline" className="gap-2">
+            <Route size={18} />
+            Track Queue
+          </Button>
         </div>
 
         {loading ? (
@@ -135,6 +157,7 @@ export default function Dashboard() {
                       key={appointment.id}
                       appointment={appointment}
                       onReschedule={() => navigate("/book-appointment")}
+                      onOpenBooking={() => navigate("/book-appointment")}
                     />
                   ))
                 )}
@@ -154,6 +177,7 @@ export default function Dashboard() {
                       key={appointment.id}
                       appointment={appointment}
                       onReschedule={() => navigate("/book-appointment")}
+                      onOpenBooking={() => navigate("/book-appointment")}
                     />
                   ))
                 )}
