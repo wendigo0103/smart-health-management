@@ -263,7 +263,7 @@ export default function QueueTracker() {
                       strokeLinecap="round"
                       style={{ transition: "stroke-dasharray 0.5s ease" }}
                     />
-                    <text x="100" y="100" textAnchor="middle" dy="0.35em" className="text-2xl font-bold fill-primary">
+                    <text x="100" y="100" textAnchor="middle" dy="0.35em" className="text-2xl font-bold fill-primary" transform="rotate(90 100 100)">
                       {patientsAhead}
                     </text>
                   </svg>
