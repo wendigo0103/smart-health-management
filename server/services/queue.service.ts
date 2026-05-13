@@ -129,10 +129,7 @@ export async function enqueuePatient(args: {
 }): Promise<IQueue> {
   const q = await ensureQueueForDoctor(args.doctorId);
   const already = q.waitingList.some(
-    (w) =>
-      w.token === args.token ||
-      (w.patientId.toString() === args.patientId &&
-        (w.status === "waiting" || w.status === "called"))
+    (w) => w.token === args.token
   );
   if (!already) {
     q.waitingList.push({
@@ -224,17 +221,22 @@ export async function callNextPatient(doctorId: string): Promise<IQueue> {
   const q = await ensureQueueForDoctor(doctorId);
   const completedTokens: string[] = [];
   const completedAppointmentIds: mongoose.Types.ObjectId[] = [];
-  for (const entry of q.waitingList) {
-    if (entry.status === "called") {
-      entry.status = "completed";
-      if (entry.appointmentId) {
-        completedAppointmentIds.push(entry.appointmentId);
-      } else {
-        completedTokens.push(entry.token);
-      }
+  const current = q.waitingList.find(
+    (w) => w.status === "called"
+  );
+  
+  if (current) {
+    current.status = "completed";
+  
+    if (current.appointmentId) {
+      completedAppointmentIds.push(current.appointmentId);
+    } else {
+      completedTokens.push(current.token);
     }
   }
-  const next = q.waitingList.find((w) => w.status === "waiting");
+  const next = q.waitingList
+  .filter((w) => w.status === "waiting")
+  .sort((a, b) => Number(a.token) - Number(b.token))[0];
   if (next) {
     next.status = "called";
     q.currentPatientToken = next.token;
@@ -261,11 +263,13 @@ export async function callNextPatient(doctorId: string): Promise<IQueue> {
 export async function markCurrentAbsent(doctorId: string): Promise<IQueue> {
   const q = await ensureQueueForDoctor(doctorId);
   const current = q.waitingList.find((w) => w.status === "called");
-  const next = q.waitingList.find((w) => w.status === "waiting");
+  const next = q.waitingList
+  .filter((w) => w.status === "waiting")
+  .sort((a, b) => Number(a.token) - Number(b.token))[0];
   if (!current || !next) {
     return q;
   }
-  current.status = "delayed";
+  current.status = "missed";
   if (current.appointmentId) {
     await Appointment.updateOne(
       { _id: current.appointmentId, status: { $ne: "cancelled" } },
