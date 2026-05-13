@@ -37,7 +37,8 @@ function expressPlugin(): Plugin {
       try {
         await connectDb();
       } catch (err) {
-        console.error("[healthqueue] MongoDB connection failed — API will error until MONGO_URI is valid:", err);
+        console.error("[healthqueue] MongoDB connection failed — fix MONGO_URI / Atlas network access, then restart dev:", err);
+        throw err;
       }
 
       const app = createApp();
