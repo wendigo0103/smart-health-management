@@ -66,7 +66,7 @@ function AppointmentCard({
             </div>
             <div>
               <p className="font-semibold text-gray-900">{appointment.doctorName}</p>
-              <p className="text-sm text-gray-600">{appointment.doctorDepartment}</p>
+              <p className="text-sm text-gray-600">{appointment.doctorDepartment} - {appointment.hospitalName}</p>
             </div>
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <Clock size={16} className="text-primary" />

@@ -34,6 +34,10 @@ export interface AppointmentRow {
   patientName: string;
   appointmentTime: string;
   doctor: string;
+
+  hospitalId?: string;
+  hospitalName?: string;
+
   status: AppointmentStatus;
 }
 
@@ -57,6 +61,10 @@ function mapDtoToRow(a: AppointmentDto): AppointmentRow {
     patientName: a.patientName,
     appointmentTime: time,
     doctor: a.doctorName,
+  
+    hospitalId: a.hospitalId,
+    hospitalName: a.hospitalName,
+  
     status: statusMap[a.status] ?? "Pending",
   };
 }
@@ -83,6 +91,7 @@ export function AppointmentsScreen() {
   const [rows, setRows] = useState<AppointmentRow[]>([]);
   const [search, setSearch] = useState("");
   const [doctorFilter, setDoctorFilter] = useState<string>(ALL_DOCTORS_VALUE);
+  const [hospitalFilter, setHospitalFilter] = useState("__all_hospitals__");
   const [doctorStats, setDoctorStats] = useState<DoctorDailyStats[]>([]);
 
   const loadAppointments = async (cancelled: () => boolean) => {
@@ -130,15 +139,32 @@ export function AppointmentsScreen() {
     return Array.from(set).sort();
   }, [rows]);
 
+  const hospitalOptions = useMemo(() => {
+    return Array.from(
+      new Map(
+        rows
+          .filter((r) => r.hospitalId)
+          .map((r) => [
+            r.hospitalId,
+            {
+              id: r.hospitalId!,
+              name: r.hospitalName || r.hospitalId!,
+            },
+          ])
+      ).values()
+    );
+  }, [rows]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
       const matchesDoctor = doctorFilter === ALL_DOCTORS_VALUE || r.doctor === doctorFilter;
+      const matchesHospital = hospitalFilter === "__all_hospitals__" || r.hospitalId === hospitalFilter;
       const matchesSearch =
         q === "" ||
         r.patientName.toLowerCase().includes(q) ||
         r.token.toLowerCase().includes(q);
-      return matchesDoctor && matchesSearch;
+      return matchesDoctor && matchesHospital && matchesSearch;
     });
   }, [rows, search, doctorFilter]);
 
@@ -202,6 +228,38 @@ export function AppointmentsScreen() {
             className="border-slate-200 bg-white max-w-md"
             autoComplete="off"
           />
+        </div>
+        <div className="w-full sm:w-64 space-y-2">
+          <Label htmlFor="hospital-filter">
+            Filter by hospital
+          </Label>
+
+          <Select
+            value={hospitalFilter}
+            onValueChange={setHospitalFilter}
+          >
+            <SelectTrigger
+              id="hospital-filter"
+              className="border-slate-200 bg-white"
+            >
+              <SelectValue placeholder="Hospital" />
+            </SelectTrigger>
+
+            <SelectContent>
+              <SelectItem value="__all_hospitals__">
+                All hospitals
+              </SelectItem>
+
+              {hospitalOptions.map((hospital) => (
+                <SelectItem
+                  key={hospital.id}
+                  value={hospital.id}
+                >
+                  {hospital.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="w-full sm:w-64 space-y-2">
           <Label htmlFor="doctor-filter">Filter by doctor</Label>
