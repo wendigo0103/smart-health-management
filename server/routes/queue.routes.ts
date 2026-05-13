@@ -1,11 +1,12 @@
 import { Router, type RequestHandler } from "express";
 import mongoose from "mongoose";
-import type { ActiveQueueEntry, DoctorQueueSnapshot } from "@shared/api";
+import type { ActiveQueueEntry, DoctorQueueSnapshot, UpdateDoctorStatusBody } from "@shared/api";
 import { requireAuth, requireRole } from "../middleware/auth";
 import {
   buildQueueSnapshot,
   callNextPatient,
   markCurrentAbsent,
+  updateDoctorQueueStatus,
 } from "../services/queue.service";
 import { broadcastQueueUpdate } from "../services/realtime.service";
 import { User } from "../models/User";
@@ -105,10 +106,37 @@ const postAbsent: RequestHandler = async (req, res) => {
   res.json(await buildQueueSnapshot(doctorId));
 };
 
+const patchDoctorStatus: RequestHandler = async (req, res) => {
+  const doctorId = String(req.params.doctorId ?? "");
+  if (!mongoose.Types.ObjectId.isValid(doctorId)) {
+    res.status(400).json({ error: "invalid doctorId" });
+    return;
+  }
+  const { id, role } = req.authUser!;
+  if (!canManageQueue(id, role, doctorId)) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  const body = req.body as UpdateDoctorStatusBody;
+  if (!["on-time", "delayed", "unavailable"].includes(body.status)) {
+    res.status(400).json({ error: "Invalid doctor status" });
+    return;
+  }
+  await updateDoctorQueueStatus({
+    doctorId,
+    status: body.status,
+    delayMinutes: Number(body.delayMinutes ?? 0),
+    statusMessage: String(body.statusMessage ?? ""),
+  });
+  await broadcastQueueUpdate(doctorId);
+  res.json(await buildQueueSnapshot(doctorId));
+};
+
 router.get("/admin/all", requireAuth, requireRole("admin"), getAllDoctorQueues);
 router.get("/admin/active", requireAuth, requireRole("admin"), getActiveQueue);
 router.get("/:doctorId", requireAuth, getQueue);
 router.post("/:doctorId/next", requireAuth, requireRole("admin"), postNext);
 router.post("/:doctorId/absent", requireAuth, requireRole("admin"), postAbsent);
+router.patch("/:doctorId/status", requireAuth, requireRole("admin"), patchDoctorStatus);
 
 export default router;

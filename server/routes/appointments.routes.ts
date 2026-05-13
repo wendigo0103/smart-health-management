@@ -9,6 +9,7 @@ import type {
   DoctorDailyStats,
   AppointmentStatusApi,
 } from "@shared/api";
+import { BOOKING_WINDOW_DAYS, CLINIC_TIME_SLOTS } from "../../shared/api";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { Appointment } from "../models/Appointment";
 import { User } from "../models/User";
@@ -41,7 +42,15 @@ async function toDto(doc: import("../models/Appointment").IAppointment): Promise
 }
 
 function dayRange(dateInput?: string): { start: Date; end: Date; date: string } {
-  const source = dateInput && /^\d{4}-\d{2}-\d{2}$/.test(dateInput) ? dateInput : new Date().toISOString().slice(0, 10);
+  const source =
+    dateInput && /^\d{4}-\d{2}-\d{2}$/.test(dateInput)
+      ? dateInput
+      : new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Asia/Kolkata",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).format(new Date());
   const start = new Date(`${source}T00:00:00.000+05:30`);
   const end = new Date(start);
   end.setDate(end.getDate() + 1);
@@ -49,9 +58,29 @@ function dayRange(dateInput?: string): { start: Date; end: Date; date: string } 
 }
 
 function timeLabel(d: Date): string {
-  const hours = String(d.getHours()).padStart(2, "0");
-  const mins = String(d.getMinutes()).padStart(2, "0");
-  return `${hours}:${mins}`;
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(d);
+}
+
+function maxBookableAt(): Date {
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  end.setDate(end.getDate() + BOOKING_WINDOW_DAYS - 1);
+  return end;
+}
+
+function isClinicSlot(d: Date): boolean {
+  const label = d.toLocaleTimeString("en-US", {
+    timeZone: "Asia/Kolkata",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+  return (CLINIC_TIME_SLOTS as readonly string[]).includes(label);
 }
 
 const createAppointment: RequestHandler = async (req, res) => {
@@ -71,6 +100,14 @@ const createAppointment: RequestHandler = async (req, res) => {
   }
   if (scheduledAt.getTime() < Date.now()) {
     res.status(400).json({ error: "Cannot book appointments in the past" });
+    return;
+  }
+  if (scheduledAt.getTime() > maxBookableAt().getTime()) {
+    res.status(400).json({ error: `Appointments can be booked up to ${BOOKING_WINDOW_DAYS} days in advance` });
+    return;
+  }
+  if (!isClinicSlot(scheduledAt)) {
+    res.status(400).json({ error: "Select an available clinic time slot" });
     return;
   }
   try {

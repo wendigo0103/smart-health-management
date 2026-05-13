@@ -16,10 +16,10 @@ const AppointmentSchema = new Schema<IAppointment>(
     patientId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     doctorId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     scheduledAt: { type: Date, required: true },
-    token: { type: String, required: true, unique: true, index: true },
+    token: { type: String, required: true, index: true },
     status: {
       type: String,
-      enum: ["confirmed", "pending", "cancelled", "completed"] satisfies AppointmentStatusApi[],
+      enum: ["confirmed", "pending", "cancelled", "completed", "missed"] satisfies AppointmentStatusApi[],
       default: "confirmed",
     },
   },
@@ -33,6 +33,8 @@ AppointmentSchema.index(
     partialFilterExpression: { status: { $in: ["confirmed", "pending", "completed"] } },
   }
 );
+
+AppointmentSchema.index({ doctorId: 1, scheduledAt: 1, token: 1 });
 
 export const Appointment: Model<IAppointment> =
   mongoose.models.Appointment || mongoose.model<IAppointment>("Appointment", AppointmentSchema);
