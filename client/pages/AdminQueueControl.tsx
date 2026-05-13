@@ -33,6 +33,7 @@ export default function AdminQueueControl() {
   const user = getStoredUser();
   const [queues, setQueues] = useState<DoctorQueueSnapshot[]>([]);
   const [statusDrafts, setStatusDrafts] = useState<Record<string, StatusDraft>>({});
+  const [selectedHospital, setSelectedHospital] = useState("all");
 
   const loadQueues = useCallback(async () => {
     try {
@@ -155,10 +156,33 @@ export default function AdminQueueControl() {
     }
   };
 
-  const sortedQueues = useMemo(
-    () => [...queues].sort((a, b) => a.doctorName.localeCompare(b.doctorName)),
-    [queues]
-  );
+  const hospitals = useMemo(() => {
+    return Array.from(
+      new Map(
+        queues
+          .filter((q) => q.hospitalId)
+          .map((q) => [
+            q.hospitalId,
+            {
+              id: q.hospitalId!,
+              name: q.hospitalName || q.hospitalId!,
+            },
+          ])
+      ).values()
+    );
+  }, [queues]);
+
+  const sortedQueues = useMemo(() => {
+    return [...queues]
+      .filter((q) => {
+        if (selectedHospital === "all") {
+          return true;
+        }
+
+        return q.hospitalId === selectedHospital;
+      })
+      .sort((a, b) => a.doctorName.localeCompare(b.doctorName));
+  }, [queues, selectedHospital]); 
 
   if (!user || user.role !== "admin") {
     return (
@@ -180,7 +204,39 @@ export default function AdminQueueControl() {
             Enable notifications
           </Button>
         </div>
+        <div className="flex flex-col sm:flex-row gap-4">
 
+        <div className="w-full sm:w-80">
+          <Label className="mb-2 block">
+            Filter by Hospital
+          </Label>
+
+          <Select
+            value={selectedHospital}
+            onValueChange={setSelectedHospital}
+          >
+            <SelectTrigger className="bg-white">
+              <SelectValue placeholder="Select hospital" />
+            </SelectTrigger>
+
+            <SelectContent>
+              <SelectItem value="all">
+                All Hospitals
+              </SelectItem>
+
+              {hospitals.map((hospital) => (
+                <SelectItem
+                  key={hospital.id}
+                  value={hospital.id}
+                >
+                  {hospital.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+      </div>
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           {sortedQueues.map((queue) => {
             const current = queue.waitingList.find((w) => w.status === "called");
@@ -208,7 +264,7 @@ export default function AdminQueueControl() {
                         {queue.doctorStatus === "on-time" ? "On time" : queue.doctorStatus}
                       </Badge>
                     </span>
-                    <span className="text-sm font-normal text-slate-500">{queue.doctorDepartment}</span>
+                    <span className="text-sm font-normal text-slate-500">{queue.doctorDepartment} - {queue.hospitalName}</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">

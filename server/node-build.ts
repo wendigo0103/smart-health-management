@@ -1,3 +1,4 @@
+import "dotenv/config";
 import path from "node:path";
 import { createServer as createHttpServer } from "http";
 import express from "express";

@@ -69,7 +69,11 @@ export interface AppointmentDto {
   createdAt?: string;
 }
 
-export type QueueWaitingStatus = "waiting" | "called" | "completed" | "delayed";
+export type QueueWaitingStatus =
+  | "waiting"
+  | "called"
+  | "completed"
+  | "missed";
 export type DoctorAvailabilityStatus = "on-time" | "delayed" | "unavailable";
 
 export interface QueueWaitingEntryDto {
@@ -171,6 +175,10 @@ export interface ActiveQueueEntry {
 export interface DoctorQueueSnapshot extends QueueSnapshot {
   doctorName: string;
   doctorDepartment: string;
+
+
+  hospitalId?: string;
+  hospitalName?: string;
 }
 
 export interface DoctorDailyStats {

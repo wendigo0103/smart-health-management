@@ -146,16 +146,19 @@ export default function QueueTracker() {
         estWaitMins: snapshot.estimatedWaitPerPatient,
       };
     }
-    const active = snapshot.waitingList.filter((w) => w.status === "waiting" || w.status === "called");
-    const myOrder = active.findIndex((w) => w.token === myToken);
-    const ahead =
-      myEntry.status === "waiting"
-        ? active.filter((w, i) => w.status === "waiting" && i < myOrder).length
-        : 0;
+    const ordered = [...snapshot.waitingList]
+      .filter((w) => w.status === "waiting" || w.status === "called")
+      .sort((a, b) => Number(a.token) - Number(b.token));
+  
+    const ahead = ordered.filter(
+      (w) =>
+        Number(w.token) < Number(myToken) &&
+        (w.status === "waiting" || w.status === "called")
+    ).length;
     let label = "Waiting";
     if (myEntry.status === "called") label = "You're being seen";
     if (myEntry.status === "completed") label = "Completed";
-    if (myEntry.status === "delayed") label = "Delayed";
+    if (myEntry.status === "missed") label = "Missed";
     const delay = snapshot.doctorStatus === "delayed" ? snapshot.delayMinutes : 0;
     const est = ahead * snapshot.estimatedWaitPerPatient + delay;
     return {
@@ -167,8 +170,14 @@ export default function QueueTracker() {
 
   const queueListUi = useMemo(() => {
     if (!snapshot || !myToken) return [];
-    const ordered = [...snapshot.waitingList].sort(
-      (a, b) => new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime()
+    const ordered = [...snapshot.waitingList]
+    .filter(
+      (w) =>
+        w.status === "waiting" ||
+        w.status === "called"
+    )
+    .sort(
+      (a, b) => Number(a.token) - Number(b.token)
     );
     return ordered.map((item) => mapRow(item, myToken, snapshot.currentPatientToken));
   }, [snapshot, myToken]);
@@ -248,7 +257,9 @@ export default function QueueTracker() {
                       fill="none"
                       stroke="#2563eb"
                       strokeWidth="8"
-                      strokeDasharray={`${Math.min(1, patientsAhead / 10) * 565.48} 565.48`}
+                      strokeDasharray={`${
+                        (1 - Math.min(1, patientsAhead / 10)) * 565.48
+                      } 565.48`}
                       strokeLinecap="round"
                       style={{ transition: "stroke-dasharray 0.5s ease" }}
                     />
@@ -330,7 +341,9 @@ export default function QueueTracker() {
             <CardContent className="p-0">
               <div className="divide-y divide-gray-200">
                 {queueListUi.length === 0 ? (
-                  <p className="p-6 text-center text-gray-500">Queue is empty or loading…</p>
+                  <p className="p-6 text-center text-gray-500">
+                  No active patients in queue.
+                </p>
                 ) : (
                   queueListUi.map((item, index) => (
                     <div
@@ -414,12 +427,10 @@ function mapRow(
     status = "Done";
     icon = "✅";
   }
-  if (item.status === "delayed") {
-    status = "Delayed";
-    icon = "⏸️";
+  if (item.status === "missed") {
+    status = "Missed";
+    icon = "❌";
   }
-  if (item.token === currentToken && item.status === "called") {
-    status = "In Progress";
-  }
+
   return { token: item.token, status, icon, isYou };
 }

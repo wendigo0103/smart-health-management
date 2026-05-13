@@ -28,7 +28,7 @@ const WaitingEntrySchema = new Schema<IWaitingEntry>(
     token: { type: String, required: true },
     status: {
       type: String,
-      enum: ["waiting", "called", "completed", "delayed"] satisfies QueueWaitingStatus[],
+      enum: ["waiting", "called", "completed", "missed"] satisfies QueueWaitingStatus[],
       default: "waiting",
     },
     joinedAt: { type: Date, default: Date.now },
