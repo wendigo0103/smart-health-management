@@ -69,7 +69,7 @@ export function initSocket(httpServer: HttpServer): void {
           ack?.({ error: "user_not_found" });
           return;
         }
-        if (role === "admin" || (role === "doctor" && userId === doctorId)) {
+        if (role === "admin") {
           await socket.join(`doctor:${doctorId}`);
           ack?.({ ok: true });
           return;

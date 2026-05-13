@@ -1,6 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { Home, Calendar, Activity, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { clearAuthSession } from "@/lib/api";
 
 export default function BottomNav() {
   const location = useLocation();
@@ -26,6 +27,7 @@ export default function BottomNav() {
       path: "/",
       icon: LogOut,
       onClick: () => {
+        clearAuthSession();
         window.location.href = "/";
       },
     },

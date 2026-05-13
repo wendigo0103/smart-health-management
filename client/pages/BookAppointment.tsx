@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiFetch, ApiError } from "@/lib/api";
-import type { CreateAppointmentResponse, DoctorListItem } from "@shared/api";
+import type { BookedSlotsResponse, CreateAppointmentResponse, DoctorListItem } from "@shared/api";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,12 +21,27 @@ import {
   ChevronLeft,
 } from "lucide-react";
 
-function buildScheduledAtIso(dateLabel: string, timeLabel: string): string {
-  const parsed = Date.parse(`${dateLabel}, 2026 ${timeLabel}`);
-  if (Number.isNaN(parsed)) {
-    return new Date().toISOString();
-  }
-  return new Date(parsed).toISOString();
+function toDateInputValue(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function labelTo24Hour(timeLabel: string): string {
+  const match = timeLabel.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return timeLabel;
+  let hours = Number(match[1]);
+  const mins = match[2];
+  const meridiem = match[3].toUpperCase();
+  if (meridiem === "PM" && hours !== 12) hours += 12;
+  if (meridiem === "AM" && hours === 12) hours = 0;
+  return `${String(hours).padStart(2, "0")}:${mins}`;
+}
+
+function buildScheduledAtIso(dateValue: string, timeLabel: string): string {
+  const parsed = new Date(`${dateValue}T${labelTo24Hour(timeLabel)}:00`);
+  return parsed.toISOString();
 }
 
 export default function BookAppointment() {
@@ -40,12 +55,24 @@ export default function BookAppointment() {
   const [bookingDoctorId, setBookingDoctorId] = useState<string | null>(null);
   const [apiDoctors, setApiDoctors] = useState<DoctorListItem[]>([]);
   const [doctorsLoading, setDoctorsLoading] = useState(true);
+  const [bookedSlots, setBookedSlots] = useState<string[]>([]);
+  const todayValue = toDateInputValue(new Date());
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      if (!selectedDepartment) {
+        setApiDoctors([]);
+        setDoctorsLoading(false);
+        return;
+      }
+      setDoctorsLoading(true);
       try {
-        const list = await apiFetch<DoctorListItem[]>("/api/doctors");
+        const departmentName =
+          departments.find((d) => d.id === selectedDepartment)?.name ?? selectedDepartment;
+        const list = await apiFetch<DoctorListItem[]>(
+          `/api/doctors?department=${encodeURIComponent(departmentName)}`
+        );
         if (!cancelled) setApiDoctors(list);
       } catch {
         if (!cancelled) {
@@ -59,7 +86,36 @@ export default function BookAppointment() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [selectedDepartment]);
+
+  useEffect(() => {
+    setSelectedDoctor(null);
+  }, [selectedDepartment]);
+
+  useEffect(() => {
+    if (!selectedDoctor || !selectedDate) {
+      setBookedSlots([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiFetch<BookedSlotsResponse>(
+          `/api/appointments/booked-slots?doctorId=${selectedDoctor}&date=${selectedDate}`
+        );
+        if (!cancelled) setBookedSlots(res.slots);
+      } catch {
+        if (!cancelled) setBookedSlots([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDoctor, selectedDate]);
+
+  useEffect(() => {
+    setSelectedTime(null);
+  }, [selectedDoctor, selectedDate]);
 
   const departments = [
     { id: "cardiology", name: "Cardiology", icon: Heart, color: "bg-red-100" },
@@ -80,7 +136,14 @@ export default function BookAppointment() {
 
   const timeSlots = ["9:00 AM", "9:30 AM", "10:00 AM", "10:30 AM", "11:00 AM", "2:00 PM", "2:30 PM", "3:00 PM"];
 
-  const dates = ["Mar 30", "Mar 31", "Apr 1", "Apr 2", "Apr 3", "Apr 4"];
+  const dates = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    return {
+      value: toDateInputValue(d),
+      label: d.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+    };
+  });
 
   const handleConfirmBooking = async () => {
     if (!selectedDoctor || !selectedDate || !selectedTime) return;
@@ -188,7 +251,9 @@ export default function BookAppointment() {
                     </div>
                     <div>
                       <p className="text-gray-600 text-sm font-medium">Date</p>
-                      <p className="text-gray-900 font-semibold">{selectedDate}</p>
+                      <p className="text-gray-900 font-semibold">
+                        {dates.find((d) => d.value === selectedDate)?.label ?? selectedDate}
+                      </p>
                     </div>
                     <div>
                       <p className="text-gray-600 text-sm font-medium">Time</p>
@@ -292,8 +357,7 @@ export default function BookAppointment() {
                   {doctorsLoading && <p className="text-sm text-gray-500 mb-2">Loading doctors…</p>}
                   {!doctorsLoading && doctors.length === 0 && (
                     <p className="text-sm text-amber-700 mb-2">
-                      No doctors available. Run <code className="text-xs">npm run seed</code> and ensure MongoDB is
-                      running.
+                      No doctors available for this department. Add a doctor or update seeded doctor departments.
                     </p>
                   )}
 
@@ -363,37 +427,51 @@ export default function BookAppointment() {
                     <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                       {dates.map((date) => (
                         <button
-                          key={date}
-                          onClick={() => setSelectedDate(date)}
+                          key={date.value}
+                          onClick={() => setSelectedDate(date.value)}
                           className={`py-2 px-3 rounded-lg border-2 font-semibold transition-all text-center text-sm ${
-                            selectedDate === date
+                            selectedDate === date.value
                               ? "border-primary bg-blue-100 text-primary"
                               : "border-gray-200 text-gray-600 hover:border-primary hover:bg-gray-50"
                           }`}
                         >
-                          {date}
+                          {date.label}
                         </button>
                       ))}
                     </div>
+                    <input
+                      type="date"
+                      min={todayValue}
+                      value={selectedDate ?? ""}
+                      onChange={(e) => setSelectedDate(e.target.value)}
+                      className="mt-3 h-10 rounded-md border border-gray-200 px-3 text-sm"
+                    />
                   </div>
 
                   {/* Time Selection */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-3">Choose Time</label>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      {timeSlots.map((time) => (
+                      {timeSlots.map((time) => {
+                        const isBooked = bookedSlots.includes(labelTo24Hour(time));
+                        return (
                         <button
                           key={time}
                           onClick={() => setSelectedTime(time)}
+                          disabled={isBooked}
                           className={`py-3 px-4 rounded-lg border-2 font-medium transition-all text-center ${
-                            selectedTime === time
+                            isBooked
+                              ? "border-gray-100 bg-gray-100 text-gray-400 cursor-not-allowed"
+                              : selectedTime === time
                               ? "border-primary bg-blue-100 text-primary"
                               : "border-gray-200 text-gray-600 hover:border-primary hover:bg-gray-50"
                           }`}
                         >
                           {time}
+                          {isBooked && <span className="block text-[10px] font-normal">Booked</span>}
                         </button>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -411,7 +489,9 @@ export default function BookAppointment() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Date:</span>
-                      <span className="font-semibold text-gray-900">{selectedDate}</span>
+                      <span className="font-semibold text-gray-900">
+                        {dates.find((d) => d.value === selectedDate)?.label ?? selectedDate}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Time:</span>
