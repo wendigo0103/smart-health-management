@@ -1,3 +1,5 @@
+
+.builder
 # Logs
 logs
 *.log
@@ -7,6 +9,7 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+.env
 node_modules
 venv
 .venv
@@ -28,4 +31,3 @@ dist-ssr
 
 .config/
 
-.env

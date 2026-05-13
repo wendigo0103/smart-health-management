@@ -102,14 +102,30 @@ export async function createBookedAppointment(args: {
   if (!doctor || doctor.role !== "doctor") {
     throw new Error("INVALID_DOCTOR");
   }
-  const token = await uniqueToken();
-  const appointment = await Appointment.create({
-    patientId: args.patientId,
+  const existingSlot = await Appointment.findOne({
     doctorId: args.doctorId,
     scheduledAt: args.scheduledAt,
-    token,
-    status: "confirmed",
+    status: { $ne: "cancelled" },
   });
+  if (existingSlot) {
+    throw new Error("SLOT_ALREADY_BOOKED");
+  }
+  const token = await uniqueToken();
+  let appointment: IAppointment;
+  try {
+    appointment = await Appointment.create({
+      patientId: args.patientId,
+      doctorId: args.doctorId,
+      scheduledAt: args.scheduledAt,
+      token,
+      status: "confirmed",
+    });
+  } catch (e) {
+    if ((e as { code?: number }).code === 11000) {
+      throw new Error("SLOT_ALREADY_BOOKED");
+    }
+    throw e;
+  }
   await enqueuePatient({
     doctorId: args.doctorId,
     patientId: args.patientId,
@@ -124,9 +140,11 @@ export async function createBookedAppointment(args: {
  */
 export async function callNextPatient(doctorId: string): Promise<IQueue> {
   const q = await ensureQueueForDoctor(doctorId);
+  const completedTokens: string[] = [];
   for (const entry of q.waitingList) {
     if (entry.status === "called") {
       entry.status = "completed";
+      completedTokens.push(entry.token);
     }
   }
   const next = q.waitingList.find((w) => w.status === "waiting");
@@ -137,6 +155,12 @@ export async function callNextPatient(doctorId: string): Promise<IQueue> {
     q.currentPatientToken = "0";
   }
   await q.save();
+  if (completedTokens.length) {
+    await Appointment.updateMany(
+      { doctorId, token: { $in: completedTokens }, status: { $ne: "cancelled" } },
+      { $set: { status: "completed" } }
+    );
+  }
   return q;
 }
 

@@ -1,7 +1,6 @@
 import { Bell, LogOut, User } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import ModeSwitcher from "../ModeSwitcher";
 import { clearAuthSession, getStoredUser } from "@/lib/api";
 
 export default function Navbar() {
@@ -26,8 +25,6 @@ export default function Navbar() {
           </Link>
 
           <div className="flex items-center gap-4">
-            <ModeSwitcher />
-
             <button
               type="button"
               className="relative p-2 text-gray-600 hover:text-primary hover:bg-blue-50 rounded-lg transition-colors"
