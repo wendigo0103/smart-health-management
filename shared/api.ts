@@ -171,6 +171,10 @@ export interface ActiveQueueEntry {
 export interface DoctorQueueSnapshot extends QueueSnapshot {
   doctorName: string;
   doctorDepartment: string;
+
+
+  hospitalId?: string;
+  hospitalName?: string;
 }
 
 export interface DoctorDailyStats {
