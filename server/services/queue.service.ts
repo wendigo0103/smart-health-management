@@ -8,6 +8,8 @@ import { Appointment, type IAppointment } from "../models/Appointment";
 import { Queue, type IQueue, type IWaitingEntry } from "../models/Queue";
 import { User } from "../models/User";
 
+const ACTIVE_APPOINTMENT_STATUSES = ["confirmed", "pending"] as const;
+
 function appointmentDayRange(scheduledAt: Date): { start: Date; end: Date } {
   const date = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Kolkata",
@@ -104,6 +106,18 @@ export async function updateDoctorQueueStatus(args: {
     q.statusMessage = "Doctor is currently unavailable. Clinic staff will update you shortly.";
   }
   await q.save();
+  if (args.status === "delayed") {
+    const rating = Math.max(1, Math.round((5 - q.delayMinutes / 30) * 10) / 10);
+    await User.updateOne(
+      { _id: args.doctorId, role: "doctor" },
+      {
+        $set: {
+          "doctorProfile.averageDelayMinutes": q.delayMinutes,
+          "doctorProfile.rating": rating,
+        },
+      }
+    );
+  }
   return q;
 }
 
@@ -145,19 +159,32 @@ export async function removePatientFromQueue(doctorId: string, patientId: string
 export async function createBookedAppointment(args: {
   patientId: string;
   doctorId: string;
+  hospitalId?: string;
   scheduledAt: Date;
 }): Promise<{ appointment: IAppointment; token: string }> {
   const doctor = await User.findById(args.doctorId);
   if (!doctor || doctor.role !== "doctor") {
     throw new Error("INVALID_DOCTOR");
   }
+  const hospitalId = args.hospitalId || doctor.hospitalId;
+  if (args.hospitalId && doctor.hospitalId && args.hospitalId !== doctor.hospitalId) {
+    throw new Error("DOCTOR_HOSPITAL_MISMATCH");
+  }
   const existingSlot = await Appointment.findOne({
     doctorId: args.doctorId,
     scheduledAt: args.scheduledAt,
-    status: { $ne: "cancelled" },
+    status: { $in: ACTIVE_APPOINTMENT_STATUSES },
   });
   if (existingSlot) {
     throw new Error("SLOT_ALREADY_BOOKED");
+  }
+  const patientConflict = await Appointment.findOne({
+    patientId: args.patientId,
+    scheduledAt: args.scheduledAt,
+    status: { $in: ACTIVE_APPOINTMENT_STATUSES },
+  });
+  if (patientConflict) {
+    throw new Error("PATIENT_SLOT_CONFLICT");
   }
   const token = await nextDailyDoctorToken(args.doctorId, args.scheduledAt);
   let appointment: IAppointment;
@@ -165,12 +192,17 @@ export async function createBookedAppointment(args: {
     appointment = await Appointment.create({
       patientId: args.patientId,
       doctorId: args.doctorId,
+      hospitalId,
       scheduledAt: args.scheduledAt,
       token,
       status: "confirmed",
     });
   } catch (e) {
     if ((e as { code?: number }).code === 11000) {
+      const keyPattern = (e as { keyPattern?: Record<string, unknown> }).keyPattern;
+      if (keyPattern?.patientId && keyPattern?.scheduledAt) {
+        throw new Error("PATIENT_SLOT_CONFLICT");
+      }
       throw new Error("SLOT_ALREADY_BOOKED");
     }
     throw e;

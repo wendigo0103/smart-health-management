@@ -79,5 +79,30 @@ export function initSocket(httpServer: HttpServer): void {
         ack?.({ error: String(e) });
       }
     });
+
+    socket.on("watchAppointments", async (payload: { doctorId?: string } | undefined, ack?: (r: unknown) => void) => {
+      try {
+        const role = socket.data.role as UserRole;
+        const userId = socket.data.userId as string;
+        if (role === "admin") {
+          await socket.join("appointments:admin");
+          ack?.({ ok: true });
+          return;
+        }
+        if (role === "doctor") {
+          const doctorId = payload?.doctorId || userId;
+          if (doctorId !== userId) {
+            ack?.({ error: "forbidden" });
+            return;
+          }
+          await socket.join(`appointments:doctor:${doctorId}`);
+          ack?.({ ok: true });
+          return;
+        }
+        ack?.({ error: "forbidden" });
+      } catch (e) {
+        ack?.({ error: String(e) });
+      }
+    });
   });
 }

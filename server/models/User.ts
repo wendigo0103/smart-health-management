@@ -7,9 +7,12 @@ export interface IUser extends Document {
   name: string;
   phone: string;
   role: UserRole;
+  hospitalId?: string;
   doctorProfile?: {
     displayName?: string;
     specialization?: string;
+    rating?: number;
+    averageDelayMinutes?: number;
   };
   createdAt: Date;
   updatedAt: Date;
@@ -21,6 +24,7 @@ const UserSchema = new Schema<IUser>(
     passwordHash: { type: String, required: true, select: false },
     name: { type: String, required: true, trim: true },
     phone: { type: String, default: "" },
+    hospitalId: { type: String, trim: true, index: true },
     role: {
       type: String,
       enum: ["patient", "doctor", "admin"] satisfies UserRole[],
@@ -29,6 +33,8 @@ const UserSchema = new Schema<IUser>(
     doctorProfile: {
       displayName: { type: String },
       specialization: { type: String },
+      rating: { type: Number, default: 5, min: 0, max: 5 },
+      averageDelayMinutes: { type: Number, default: 0, min: 0 },
     },
   },
   { timestamps: true }

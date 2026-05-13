@@ -22,6 +22,12 @@ export const CLINIC_TIME_SLOTS = [
   "5:00 PM",
 ] as const;
 
+export const HOSPITALS = [
+  { id: "central-city-hospital", name: "Central City Hospital" },
+  { id: "northside-medical-center", name: "Northside Medical Center" },
+  { id: "lakeside-care-hospital", name: "Lakeside Care Hospital" },
+] as const;
+
 export interface DemoResponse {
   message: string;
 }
@@ -32,9 +38,12 @@ export interface UserPublic {
   name: string;
   phone: string;
   role: UserRole;
+  hospitalId?: string;
   doctorProfile?: {
     displayName?: string;
     specialization?: string;
+    rating?: number;
+    averageDelayMinutes?: number;
   };
 }
 
@@ -52,6 +61,8 @@ export interface AppointmentDto {
   patientName: string;
   doctorName: string;
   doctorDepartment: string;
+  hospitalId?: string;
+  hospitalName?: string;
   scheduledAt: string;
   token: string;
   status: AppointmentStatusApi;
@@ -93,6 +104,10 @@ export interface DoctorListItem {
   id: string;
   name: string;
   specialization: string;
+  hospitalId?: string;
+  hospitalName?: string;
+  rating?: number;
+  averageDelayMinutes?: number;
   nextAvailableLabel?: string;
 }
 
@@ -112,6 +127,7 @@ export interface LoginBody {
 export interface CreateAppointmentBody {
   doctorId: string;
   scheduledAt: string;
+  hospitalId?: string;
 }
 
 export interface CreateAppointmentResponse {
@@ -122,7 +138,12 @@ export interface CreateAppointmentResponse {
 export interface BookedSlotsResponse {
   doctorId: string;
   date: string;
+  /** Union of slots unavailable to this patient for this doctor/date. */
   slots: string[];
+  /** Slots already taken by the selected doctor. */
+  doctorBookedSlots: string[];
+  /** Slots where the current patient already has an active appointment with any doctor. */
+  patientBookedSlots: string[];
 }
 
 export interface AnalyticsSummary {
@@ -159,4 +180,13 @@ export interface DoctorDailyStats {
   completedAppointments: number;
   remainingAppointments: number;
   totalAppointments: number;
+}
+
+export interface CreateDoctorBody {
+  name: string;
+  email: string;
+  phone?: string;
+  specialization: string;
+  hospitalId: string;
+  password?: string;
 }

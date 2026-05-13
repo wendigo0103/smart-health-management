@@ -4,6 +4,7 @@ import type { AppointmentStatusApi } from "@shared/api";
 export interface IAppointment extends Document {
   patientId: Types.ObjectId;
   doctorId: Types.ObjectId;
+  hospitalId?: string;
   scheduledAt: Date;
   token: string;
   status: AppointmentStatusApi;
@@ -15,6 +16,7 @@ const AppointmentSchema = new Schema<IAppointment>(
   {
     patientId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     doctorId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    hospitalId: { type: String, trim: true, index: true },
     scheduledAt: { type: Date, required: true },
     token: { type: String, required: true, index: true },
     status: {
@@ -31,6 +33,14 @@ AppointmentSchema.index(
   {
     unique: true,
     partialFilterExpression: { status: { $in: ["confirmed", "pending", "completed"] } },
+  }
+);
+
+AppointmentSchema.index(
+  { patientId: 1, scheduledAt: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { status: { $in: ["confirmed", "pending"] } },
   }
 );
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bell, CalendarClock, CheckCircle2, LogOut, User } from "lucide-react";
+import { Bell, CalendarClock, CheckCircle2, LogOut, Route, User } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -28,6 +28,17 @@ export default function Navbar() {
           </Link>
 
           <div className="flex items-center gap-4">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate("/queue")}
+              className="text-gray-600 hover:text-primary gap-2"
+            >
+              <Route size={18} />
+              <span className="hidden sm:inline">Track Queue</span>
+            </Button>
+
             <Popover onOpenChange={(open) => open && setHasUnread(false)}>
               <PopoverTrigger asChild>
                 <button

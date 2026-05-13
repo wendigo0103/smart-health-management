@@ -9,7 +9,7 @@ import type {
   DoctorDailyStats,
   AppointmentStatusApi,
 } from "@shared/api";
-import { BOOKING_WINDOW_DAYS, CLINIC_TIME_SLOTS } from "../../shared/api";
+import { BOOKING_WINDOW_DAYS, CLINIC_TIME_SLOTS, HOSPITALS } from "../../shared/api";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { Appointment } from "../models/Appointment";
 import { User } from "../models/User";
@@ -18,9 +18,10 @@ import {
   createBookedAppointment,
   removePatientFromQueue,
 } from "../services/queue.service";
-import { broadcastQueueUpdate } from "../services/realtime.service";
+import { broadcastAppointmentBooked, broadcastQueueUpdate } from "../services/realtime.service";
 
 const router = Router();
+const ACTIVE_APPOINTMENT_STATUSES = ["confirmed", "pending"] as const;
 
 async function toDto(doc: import("../models/Appointment").IAppointment): Promise<AppointmentDto> {
   const [patient, doctor] = await Promise.all([
@@ -34,6 +35,8 @@ async function toDto(doc: import("../models/Appointment").IAppointment): Promise
     patientName: patient?.name ?? "Unknown",
     doctorName: doctor?.doctorProfile?.displayName || doctor?.name || "Unknown",
     doctorDepartment: doctor?.doctorProfile?.specialization || "General",
+    hospitalId: doc.hospitalId || doctor?.hospitalId,
+    hospitalName: HOSPITALS.find((h) => h.id === (doc.hospitalId || doctor?.hospitalId))?.name,
     scheduledAt: doc.scheduledAt.toISOString(),
     token: doc.token,
     status: doc.status,
@@ -114,9 +117,11 @@ const createAppointment: RequestHandler = async (req, res) => {
     const { appointment } = await createBookedAppointment({
       patientId: req.authUser!.id,
       doctorId: body.doctorId,
+      hospitalId: body.hospitalId,
       scheduledAt,
     });
     await broadcastQueueUpdate(body.doctorId);
+    broadcastAppointmentBooked(body.doctorId);
     const dto = await toDto(appointment);
     const queue = await buildQueueSnapshot(body.doctorId);
     const out: CreateAppointmentResponse = { appointment: dto, queue };
@@ -128,6 +133,14 @@ const createAppointment: RequestHandler = async (req, res) => {
     }
     if (e instanceof Error && e.message === "SLOT_ALREADY_BOOKED") {
       res.status(409).json({ error: "This time slot is already booked" });
+      return;
+    }
+    if (e instanceof Error && e.message === "DOCTOR_HOSPITAL_MISMATCH") {
+      res.status(400).json({ error: "Selected doctor does not belong to this hospital" });
+      return;
+    }
+    if (e instanceof Error && e.message === "PATIENT_SLOT_CONFLICT") {
+      res.status(409).json({ error: "You already have an appointment at this time" });
       return;
     }
     throw e;
@@ -142,15 +155,26 @@ const bookedSlots: RequestHandler = async (req, res) => {
     return;
   }
   const { start, end } = dayRange(date);
-  const docs = await Appointment.find({
-    doctorId,
-    scheduledAt: { $gte: start, $lt: end },
-    status: { $ne: "cancelled" },
-  }).select("scheduledAt");
+  const [doctorDocs, patientDocs] = await Promise.all([
+    Appointment.find({
+      doctorId,
+      scheduledAt: { $gte: start, $lt: end },
+      status: { $in: ACTIVE_APPOINTMENT_STATUSES },
+    }).select("scheduledAt"),
+    Appointment.find({
+      patientId: req.authUser!.id,
+      scheduledAt: { $gte: start, $lt: end },
+      status: { $in: ACTIVE_APPOINTMENT_STATUSES },
+    }).select("scheduledAt"),
+  ]);
+  const doctorBookedSlots = doctorDocs.map((d) => timeLabel(d.scheduledAt));
+  const patientBookedSlots = patientDocs.map((d) => timeLabel(d.scheduledAt));
   const out: BookedSlotsResponse = {
     doctorId,
     date,
-    slots: docs.map((d) => timeLabel(d.scheduledAt)),
+    slots: Array.from(new Set([...doctorBookedSlots, ...patientBookedSlots])),
+    doctorBookedSlots,
+    patientBookedSlots,
   };
   res.json(out);
 };
