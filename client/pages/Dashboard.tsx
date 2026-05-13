@@ -28,21 +28,31 @@ function AppointmentCard({
   appointment,
   onReschedule,
   onOpenBooking,
+  clickable = true,
 }: {
   appointment: AppointmentDto;
   onReschedule: () => void;
   onOpenBooking: () => void;
+  clickable?: boolean;
 }) {
   const when = new Date(appointment.scheduledAt);
   return (
     <Card
-      role="button"
-      tabIndex={0}
-      onClick={onOpenBooking}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : -1}
+      onClick={clickable ? onOpenBooking : undefined}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") onOpenBooking();
+        if (
+          clickable &&
+          (e.key === "Enter" || e.key === " ")
+        ) {
+          onOpenBooking();
+        }
       }}
-      className="border border-gray-200 shadow-sm cursor-pointer hover:border-primary hover:shadow-md transition-all"
+      className={`
+        border border-gray-200 shadow-sm transition-all
+        ${clickable ? "cursor-pointer hover:border-primary hover:shadow-md" : ""}
+      `}
     >
       <CardContent className="p-4 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -145,11 +155,16 @@ export default function Dashboard() {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <section>
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Upcoming Appointments</h2>
+              <h2 className="text-xl font-bold text-gray-900 mb-4">
+                Upcoming Appointments
+              </h2>
+
               <div className="space-y-3">
                 {upcoming.length === 0 ? (
                   <Card className="border border-gray-200">
-                    <CardContent className="p-6 text-gray-600">No upcoming appointments.</CardContent>
+                    <CardContent className="p-6 text-gray-600">
+                      No upcoming appointments.
+                    </CardContent>
                   </Card>
                 ) : (
                   upcoming.map((appointment) => (
@@ -157,7 +172,7 @@ export default function Dashboard() {
                       key={appointment.id}
                       appointment={appointment}
                       onReschedule={() => navigate("/book-appointment")}
-                      onOpenBooking={() => navigate("/book-appointment")}
+                      onOpenBooking={() => navigate(`/queue`)}
                     />
                   ))
                 )}
@@ -165,19 +180,27 @@ export default function Dashboard() {
             </section>
 
             <section>
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Past Appointments</h2>
+              <h2 className="text-xl font-bold text-gray-900 mb-4">
+                Past Appointments
+              </h2>
+
               <div className="space-y-3">
                 {past.length === 0 ? (
                   <Card className="border border-gray-200">
-                    <CardContent className="p-6 text-gray-600">No past appointments yet.</CardContent>
+                    <CardContent className="p-6 text-gray-600">
+                      No past appointments yet.
+                    </CardContent>
                   </Card>
                 ) : (
                   past.map((appointment) => (
                     <AppointmentCard
                       key={appointment.id}
                       appointment={appointment}
-                      onReschedule={() => navigate("/book-appointment")}
-                      onOpenBooking={() => navigate("/book-appointment")}
+                      onReschedule={() => {}}
+
+                      // Empty function = no navigation
+                      onOpenBooking={() => {}}
+                      clickable={false}
                     />
                   ))
                 )}
