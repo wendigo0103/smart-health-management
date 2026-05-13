@@ -17,12 +17,20 @@ function statusClass(status: AppointmentDto["status"]) {
       return "bg-slate-200 text-slate-700";
     case "pending":
       return "bg-amber-100 text-amber-900";
+    case "missed":
+      return "bg-red-100 text-red-700";
     default:
       return "bg-blue-100 text-primary";
   }
 }
 
-function AppointmentCard({ appointment }: { appointment: AppointmentDto }) {
+function AppointmentCard({
+  appointment,
+  onReschedule,
+}: {
+  appointment: AppointmentDto;
+  onReschedule: () => void;
+}) {
   const when = new Date(appointment.scheduledAt);
   return (
     <Card className="border border-gray-200 shadow-sm">
@@ -48,6 +56,11 @@ function AppointmentCard({ appointment }: { appointment: AppointmentDto }) {
           <Badge className={`${statusClass(appointment.status)} border-0 capitalize w-fit`}>
             {appointment.status}
           </Badge>
+          {appointment.status === "missed" && (
+            <Button type="button" size="sm" variant="outline" onClick={onReschedule}>
+              Reschedule
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -83,10 +96,10 @@ export default function Dashboard() {
     const active = appointments.filter((a) => a.status !== "cancelled");
     return {
       upcoming: active
-        .filter((a) => a.status !== "completed" && new Date(a.scheduledAt).getTime() >= now)
+        .filter((a) => a.status !== "completed" && a.status !== "missed" && new Date(a.scheduledAt).getTime() >= now)
         .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()),
       past: appointments
-        .filter((a) => a.status === "completed" || new Date(a.scheduledAt).getTime() < now)
+        .filter((a) => a.status === "completed" || a.status === "missed" || new Date(a.scheduledAt).getTime() < now)
         .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime()),
     };
   }, [appointments]);
@@ -97,7 +110,7 @@ export default function Dashboard() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Welcome Back, {user?.name ?? "Patient"}</h1>
-            <p className="text-gray-600 mt-2">Your appointment history from MongoDB.</p>
+            <p className="text-gray-600 mt-2">Your appointments and visit history.</p>
           </div>
           <Button onClick={() => navigate("/book-appointment")} className="bg-primary text-white gap-2">
             <Stethoscope size={18} />
@@ -118,7 +131,11 @@ export default function Dashboard() {
                   </Card>
                 ) : (
                   upcoming.map((appointment) => (
-                    <AppointmentCard key={appointment.id} appointment={appointment} />
+                    <AppointmentCard
+                      key={appointment.id}
+                      appointment={appointment}
+                      onReschedule={() => navigate("/book-appointment")}
+                    />
                   ))
                 )}
               </div>
@@ -133,7 +150,11 @@ export default function Dashboard() {
                   </Card>
                 ) : (
                   past.map((appointment) => (
-                    <AppointmentCard key={appointment.id} appointment={appointment} />
+                    <AppointmentCard
+                      key={appointment.id}
+                      appointment={appointment}
+                      onReschedule={() => navigate("/book-appointment")}
+                    />
                   ))
                 )}
               </div>

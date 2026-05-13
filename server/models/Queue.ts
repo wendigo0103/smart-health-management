@@ -1,7 +1,8 @@
 import mongoose, { Schema, type Document, type Model, type Types } from "mongoose";
-import type { QueueWaitingStatus } from "@shared/api";
+import type { DoctorAvailabilityStatus, QueueWaitingStatus } from "@shared/api";
 
 export interface IWaitingEntry {
+  appointmentId?: Types.ObjectId;
   patientId: Types.ObjectId;
   token: string;
   status: QueueWaitingStatus;
@@ -13,12 +14,16 @@ export interface IQueue extends Document {
   currentPatientToken: string;
   waitingList: IWaitingEntry[];
   estimatedWaitPerPatient: number;
+  doctorStatus: DoctorAvailabilityStatus;
+  delayMinutes: number;
+  statusMessage: string;
   createdAt: Date;
   updatedAt: Date;
 }
 
 const WaitingEntrySchema = new Schema<IWaitingEntry>(
   {
+    appointmentId: { type: Schema.Types.ObjectId, ref: "Appointment" },
     patientId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     token: { type: String, required: true },
     status: {
@@ -37,6 +42,13 @@ const QueueSchema = new Schema<IQueue>(
     currentPatientToken: { type: String, default: "0" },
     waitingList: { type: [WaitingEntrySchema], default: [] },
     estimatedWaitPerPatient: { type: Number, default: 15 },
+    doctorStatus: {
+      type: String,
+      enum: ["on-time", "delayed", "unavailable"] satisfies DoctorAvailabilityStatus[],
+      default: "on-time",
+    },
+    delayMinutes: { type: Number, default: 0, min: 0 },
+    statusMessage: { type: String, default: "" },
   },
   { timestamps: true }
 );

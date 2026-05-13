@@ -1,11 +1,24 @@
 import mongoose from "mongoose";
-import type { QueueSnapshot, QueueWaitingEntryDto } from "@shared/api";
+import type {
+  DoctorAvailabilityStatus,
+  QueueSnapshot,
+  QueueWaitingEntryDto,
+} from "@shared/api";
 import { Appointment, type IAppointment } from "../models/Appointment";
 import { Queue, type IQueue, type IWaitingEntry } from "../models/Queue";
 import { User } from "../models/User";
 
-function genAppointmentToken(): string {
-  return `A-${Math.floor(1000 + Math.random() * 9000)}`;
+function appointmentDayRange(scheduledAt: Date): { start: Date; end: Date } {
+  const date = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(scheduledAt);
+  const start = new Date(`${date}T00:00:00.000+05:30`);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return { start, end };
 }
 
 export async function ensureQueueForDoctor(doctorId: string): Promise<IQueue> {
@@ -16,18 +29,25 @@ export async function ensureQueueForDoctor(doctorId: string): Promise<IQueue> {
       currentPatientToken: "0",
       waitingList: [],
       estimatedWaitPerPatient: 15,
+      doctorStatus: "on-time",
+      delayMinutes: 0,
+      statusMessage: "",
     });
   }
   return q;
 }
 
-async function uniqueToken(): Promise<string> {
-  for (let i = 0; i < 8; i++) {
-    const t = genAppointmentToken();
-    const exists = await Appointment.findOne({ token: t });
-    if (!exists) return t;
-  }
-  return `A-${Date.now()}`;
+async function nextDailyDoctorToken(doctorId: string, scheduledAt: Date): Promise<string> {
+  const { start, end } = appointmentDayRange(scheduledAt);
+  const appointments = await Appointment.find({
+    doctorId,
+    scheduledAt: { $gte: start, $lt: end },
+  }).select("token");
+  const maxToken = appointments.reduce((max, appointment) => {
+    const numeric = Number(appointment.token);
+    return Number.isInteger(numeric) && numeric > max ? numeric : max;
+  }, 0);
+  return String(maxToken + 1);
 }
 
 export async function buildQueueSnapshot(doctorId: string): Promise<QueueSnapshot> {
@@ -36,8 +56,11 @@ export async function buildQueueSnapshot(doctorId: string): Promise<QueueSnapsho
     return {
       doctorId,
       currentPatientToken: "0",
-      waitingList: [],
-      estimatedWaitPerPatient: 15,
+    waitingList: [],
+    estimatedWaitPerPatient: 15,
+    doctorStatus: "on-time",
+    delayMinutes: 0,
+    statusMessage: "",
     };
   }
   const patientIds = q.waitingList.map((w) => w.patientId);
@@ -45,6 +68,7 @@ export async function buildQueueSnapshot(doctorId: string): Promise<QueueSnapsho
   const nameById = new Map(users.map((u) => [u._id.toString(), u.name]));
 
   const waitingList: QueueWaitingEntryDto[] = q.waitingList.map((w: IWaitingEntry) => ({
+    appointmentId: w.appointmentId?.toString(),
     patientId: w.patientId.toString(),
     token: w.token,
     status: w.status,
@@ -57,10 +81,34 @@ export async function buildQueueSnapshot(doctorId: string): Promise<QueueSnapsho
     currentPatientToken: q.currentPatientToken,
     waitingList,
     estimatedWaitPerPatient: q.estimatedWaitPerPatient,
+    doctorStatus: q.doctorStatus ?? "on-time",
+    delayMinutes: q.delayMinutes ?? 0,
+    statusMessage: q.statusMessage ?? "",
   };
 }
 
+export async function updateDoctorQueueStatus(args: {
+  doctorId: string;
+  status: DoctorAvailabilityStatus;
+  delayMinutes: number;
+  statusMessage: string;
+}): Promise<IQueue> {
+  const q = await ensureQueueForDoctor(args.doctorId);
+  q.doctorStatus = args.status;
+  q.delayMinutes = args.status === "delayed" ? Math.max(0, args.delayMinutes) : 0;
+  q.statusMessage = args.statusMessage.trim().slice(0, 240);
+  if (args.status === "on-time") {
+    q.statusMessage = "";
+  }
+  if (args.status === "unavailable" && !q.statusMessage) {
+    q.statusMessage = "Doctor is currently unavailable. Clinic staff will update you shortly.";
+  }
+  await q.save();
+  return q;
+}
+
 export async function enqueuePatient(args: {
+  appointmentId: string;
   doctorId: string;
   patientId: string;
   token: string;
@@ -74,6 +122,7 @@ export async function enqueuePatient(args: {
   );
   if (!already) {
     q.waitingList.push({
+      appointmentId: new mongoose.Types.ObjectId(args.appointmentId),
       patientId: new mongoose.Types.ObjectId(args.patientId),
       token: args.token,
       status: "waiting",
@@ -110,7 +159,7 @@ export async function createBookedAppointment(args: {
   if (existingSlot) {
     throw new Error("SLOT_ALREADY_BOOKED");
   }
-  const token = await uniqueToken();
+  const token = await nextDailyDoctorToken(args.doctorId, args.scheduledAt);
   let appointment: IAppointment;
   try {
     appointment = await Appointment.create({
@@ -127,6 +176,7 @@ export async function createBookedAppointment(args: {
     throw e;
   }
   await enqueuePatient({
+    appointmentId: appointment._id.toString(),
     doctorId: args.doctorId,
     patientId: args.patientId,
     token,
@@ -141,10 +191,15 @@ export async function createBookedAppointment(args: {
 export async function callNextPatient(doctorId: string): Promise<IQueue> {
   const q = await ensureQueueForDoctor(doctorId);
   const completedTokens: string[] = [];
+  const completedAppointmentIds: mongoose.Types.ObjectId[] = [];
   for (const entry of q.waitingList) {
     if (entry.status === "called") {
       entry.status = "completed";
-      completedTokens.push(entry.token);
+      if (entry.appointmentId) {
+        completedAppointmentIds.push(entry.appointmentId);
+      } else {
+        completedTokens.push(entry.token);
+      }
     }
   }
   const next = q.waitingList.find((w) => w.status === "waiting");
@@ -155,6 +210,12 @@ export async function callNextPatient(doctorId: string): Promise<IQueue> {
     q.currentPatientToken = "0";
   }
   await q.save();
+  if (completedAppointmentIds.length) {
+    await Appointment.updateMany(
+      { _id: { $in: completedAppointmentIds }, status: { $ne: "cancelled" } },
+      { $set: { status: "completed" } }
+    );
+  }
   if (completedTokens.length) {
     await Appointment.updateMany(
       { doctorId, token: { $in: completedTokens }, status: { $ne: "cancelled" } },
@@ -167,18 +228,25 @@ export async function callNextPatient(doctorId: string): Promise<IQueue> {
 /** Mark the active "called" patient as delayed (no-show) and call the next waiting patient. */
 export async function markCurrentAbsent(doctorId: string): Promise<IQueue> {
   const q = await ensureQueueForDoctor(doctorId);
-  for (const entry of q.waitingList) {
-    if (entry.status === "called") {
-      entry.status = "delayed";
-    }
-  }
+  const current = q.waitingList.find((w) => w.status === "called");
   const next = q.waitingList.find((w) => w.status === "waiting");
-  if (next) {
-    next.status = "called";
-    q.currentPatientToken = next.token;
-  } else {
-    q.currentPatientToken = "0";
+  if (!current || !next) {
+    return q;
   }
+  current.status = "delayed";
+  if (current.appointmentId) {
+    await Appointment.updateOne(
+      { _id: current.appointmentId, status: { $ne: "cancelled" } },
+      { $set: { status: "missed" } }
+    );
+  } else {
+    await Appointment.updateOne(
+      { doctorId, patientId: current.patientId, token: current.token, status: { $ne: "cancelled" } },
+      { $set: { status: "missed" } }
+    );
+  }
+  next.status = "called";
+  q.currentPatientToken = next.token;
   await q.save();
   return q;
 }
