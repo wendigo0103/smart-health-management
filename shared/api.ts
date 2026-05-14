@@ -204,3 +204,29 @@ export interface CreateDoctorBody {
   hospitalId: string;
   password?: string;
 }
+
+export type NotificationType =
+  | "queue_called"
+  | "doctor_delayed"
+  | "doctor_unavailable"
+  | "appointment_confirmed"
+  | "appointment_missed";
+
+  export interface NotificationDto {
+    id: string;
+  
+    title: string;
+  
+    message: string;
+  
+    type:
+      | "queue_called"
+      | "doctor_delayed"
+      | "doctor_unavailable"
+      | "appointment_confirmed"
+      | "appointment_missed";
+  
+    read: boolean;
+  
+    createdAt: string;
+  }

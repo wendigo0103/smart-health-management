@@ -1,20 +1,81 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Bell, CalendarClock, CheckCircle2, LogOut, Route, User } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { clearAuthSession, getStoredUser } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
+import type { NotificationDto } from "@shared/api";
+import { getQueueSocket } from "@/lib/socket";
+import { getToken } from "@/lib/api";
 
 export default function Navbar() {
   const navigate = useNavigate();
   const stored = getStoredUser();
   const patientName = stored?.name ?? "Guest";
-  const [hasUnread, setHasUnread] = useState(true);
+  const [notifications, setNotifications] = useState<NotificationDto[]>([]);
 
   const handleLogout = () => {
     clearAuthSession();
     navigate("/");
   };
+
+  useEffect(() => {
+    let cancelled = false;
+  
+    (async () => {
+      try {
+        const data = await apiFetch<NotificationDto[]>(
+          "/api/notifications"
+        );
+  
+        if (!cancelled) {
+          setNotifications(data);
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+  
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const token = getToken();
+  
+    if (!token) return;
+  
+    const socket = getQueueSocket();
+  
+    (
+      socket as unknown as {
+        auth: { token: string };
+      }
+    ).auth = { token };
+  
+    if (!socket.connected) {
+      socket.connect();
+    }
+  
+    const onNotification = (payload: NotificationDto) => {
+      setNotifications((prev) => [
+        {
+          ...payload,
+          id: crypto.randomUUID(),
+          read: false,
+        },
+        ...prev,
+      ]);
+    };
+  
+    socket.on("notification", onNotification);
+  
+    return () => {
+      socket.off("notification", onNotification);
+    };
+  }, []);
 
   return (
     <nav className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
@@ -28,18 +89,27 @@ export default function Navbar() {
           </Link>
 
           <div className="flex items-center gap-4">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate("/queue")}
-              className="text-gray-600 hover:text-primary gap-2"
-            >
-              <Route size={18} />
-              <span className="hidden sm:inline">Track Queue</span>
-            </Button>
 
-            <Popover onOpenChange={(open) => open && setHasUnread(false)}>
+          <Popover
+            onOpenChange={async (open) => {
+              if (!open) return;
+
+              try {
+                await apiFetch("/api/notifications/read-all", {
+                  method: "PATCH",
+                });
+
+                setNotifications((prev) =>
+                  prev.map((n) => ({
+                    ...n,
+                    read: true,
+                  }))
+                );
+              } catch {
+                /* ignore */
+              }
+            }}
+          >
               <PopoverTrigger asChild>
                 <button
                   type="button"
@@ -47,7 +117,7 @@ export default function Navbar() {
                   aria-label="Notifications"
                 >
                   <Bell size={20} />
-                  {hasUnread && (
+                  {notifications.some((n) => !n.read) && (
                     <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
                   )}
                 </button>
@@ -58,28 +128,38 @@ export default function Navbar() {
                   <p className="text-xs text-gray-500">Appointment and queue updates appear here.</p>
                 </div>
                 <div className="divide-y divide-gray-100">
-                  <div className="flex gap-3 px-4 py-3">
-                    <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-blue-50">
-                      <CalendarClock size={16} className="text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Booking reminders</p>
-                      <p className="text-xs text-gray-500">
-                        Confirmations, cancellations, and schedule changes will be listed here.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex gap-3 px-4 py-3">
-                    <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50">
-                      <CheckCircle2 size={16} className="text-emerald-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Queue alerts</p>
-                      <p className="text-xs text-gray-500">
-                        When your turn is near, the live queue will notify you here.
-                      </p>
-                    </div>
-                  </div>
+                {notifications.length === 0 ? (
+                      <div className="px-4 py-6 text-sm text-gray-500">
+                        No notifications yet.
+                      </div>
+                    ) : (
+                      notifications.map((n) => (
+                        <div
+                          key={n.id}
+                          className={`flex gap-3 px-4 py-3 ${
+                            !n.read ? "bg-blue-50" : ""
+                          }`}
+                        >
+                          <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-blue-100">
+                            <Bell size={16} className="text-primary" />
+                          </div>
+
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-900">
+                              {n.title}
+                            </p>
+
+                            <p className="text-xs text-gray-500">
+                              {n.message}
+                            </p>
+
+                            <p className="mt-1 text-[11px] text-gray-400">
+                              {new Date(n.createdAt).toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    )}
                 </div>
               </PopoverContent>
             </Popover>

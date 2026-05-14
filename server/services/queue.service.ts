@@ -7,6 +7,8 @@ import type {
 import { Appointment, type IAppointment } from "../models/Appointment";
 import { Queue, type IQueue, type IWaitingEntry } from "../models/Queue";
 import { User } from "../models/User";
+import { createNotification } from "./notification.service";
+import { emitNotification } from "./realtime.service";
 
 const ACTIVE_APPOINTMENT_STATUSES = ["confirmed", "pending"] as const;
 
@@ -118,6 +120,54 @@ export async function updateDoctorQueueStatus(args: {
       }
     );
   }
+  if (args.status === "delayed" || args.status === "unavailable") {
+
+    const activePatients = q.waitingList.filter(
+      (w) =>
+        w.status === "waiting" ||
+        w.status === "called"
+    );
+  
+    for (const patient of activePatients) {
+  
+      const title =
+        args.status === "delayed"
+          ? "Doctor Running Late"
+          : "Doctor Unavailable";
+  
+      const message =
+        args.status === "delayed"
+          ? `Your doctor is delayed by ${q.delayMinutes} minutes.`
+          : q.statusMessage ||
+            "Doctor is currently unavailable.";
+  
+      await createNotification({
+        userId: patient.patientId.toString(),
+  
+        title,
+  
+        message,
+  
+        type:
+          args.status === "delayed"
+            ? "doctor_delayed"
+            : "doctor_unavailable",
+      });
+  
+      emitNotification(patient.patientId.toString(), {
+        title,
+  
+        message,
+  
+        type:
+          args.status === "delayed"
+            ? "doctor_delayed"
+            : "doctor_unavailable",
+  
+        createdAt: new Date().toISOString(),
+      });
+    }
+  }
   return q;
 }
 
@@ -204,6 +254,26 @@ export async function createBookedAppointment(args: {
     }
     throw e;
   }
+  await createNotification({
+    userId: args.patientId,
+  
+    title: "Appointment Confirmed",
+  
+    message: `Your appointment has been booked successfully. Token ${token}.`,
+  
+    type: "appointment_confirmed",
+  });
+
+  emitNotification(args.patientId, {
+    title: "Appointment Confirmed",
+  
+    message: `Your appointment has been booked successfully. Token ${token}.`,
+  
+    type: "appointment_confirmed",
+  
+    createdAt: new Date().toISOString(),
+  });
+  
   await enqueuePatient({
     appointmentId: appointment._id.toString(),
     doctorId: args.doctorId,
@@ -239,7 +309,28 @@ export async function callNextPatient(doctorId: string): Promise<IQueue> {
   .sort((a, b) => Number(a.token) - Number(b.token))[0];
   if (next) {
     next.status = "called";
+  
     q.currentPatientToken = next.token;
+  
+    await createNotification({
+      userId: next.patientId.toString(),
+  
+      title: "Your Turn Has Arrived",
+  
+      message: `Token ${next.token}, please proceed to consultation.`,
+  
+      type: "queue_called",
+    });
+  
+    emitNotification(next.patientId.toString(), {
+      title: "Your Turn Has Arrived",
+  
+      message: `Token ${next.token}, please proceed to consultation.`,
+  
+      type: "queue_called",
+  
+      createdAt: new Date().toISOString(),
+    });
   } else {
     q.currentPatientToken = "0";
   }
@@ -270,6 +361,27 @@ export async function markCurrentAbsent(doctorId: string): Promise<IQueue> {
     return q;
   }
   current.status = "missed";
+  await createNotification({
+    userId: current.patientId.toString(),
+  
+    title: "Appointment Marked Missed",
+  
+    message:
+      "You were marked absent for your appointment.",
+  
+    type: "appointment_missed",
+  });
+  
+  emitNotification(current.patientId.toString(), {
+    title: "Appointment Marked Missed",
+  
+    message:
+      "You were marked absent for your appointment.",
+  
+    type: "appointment_missed",
+  
+    createdAt: new Date().toISOString(),
+  });
   if (current.appointmentId) {
     await Appointment.updateOne(
       { _id: current.appointmentId, status: { $ne: "cancelled" } },
@@ -282,6 +394,25 @@ export async function markCurrentAbsent(doctorId: string): Promise<IQueue> {
     );
   }
   next.status = "called";
+  await createNotification({
+    userId: next.patientId.toString(),
+  
+    title: "Your Turn Has Arrived",
+  
+    message: `Token ${next.token}, please proceed to consultation.`,
+  
+    type: "queue_called",
+  });
+  
+  emitNotification(next.patientId.toString(), {
+    title: "Your Turn Has Arrived",
+  
+    message: `Token ${next.token}, please proceed to consultation.`,
+  
+    type: "queue_called",
+  
+    createdAt: new Date().toISOString(),
+  });
   q.currentPatientToken = next.token;
   await q.save();
   return q;

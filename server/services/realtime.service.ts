@@ -11,6 +11,14 @@ export function getIo(): Server | null {
   return io;
 }
 
+export function emitNotification(userId: string, payload: unknown) {
+  const io = getIo();
+
+  if (!io) return;
+
+  io.to(`user:${userId}`).emit("notification", payload);
+}
+
 export async function broadcastQueueUpdate(doctorId: string): Promise<void> {
   if (!io) return;
   const snapshot = await buildQueueSnapshot(doctorId);

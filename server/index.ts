@@ -9,6 +9,7 @@ import appointmentsRoutes from "./routes/appointments.routes";
 import queueRoutes from "./routes/queue.routes";
 import { initSocket } from "./config/socket";
 import { getIo } from "./services/realtime.service";
+import notificationRoutes from "./routes/notification.routes";
 
 /**
  * Express app (REST). Mount Socket.io on the same HTTP server via `attachSockets`.
@@ -31,6 +32,7 @@ export function createApp(): express.Express {
   app.use("/api/doctors", doctorsRoutes);
   app.use("/api/appointments", appointmentsRoutes);
   app.use("/api/queue", queueRoutes);
+  app.use("/api/notifications", notificationRoutes);
 
   return app;
 }

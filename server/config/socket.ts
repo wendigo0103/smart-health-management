@@ -31,6 +31,9 @@ export function initSocket(httpServer: HttpServer): void {
   });
 
   io.on("connection", (socket) => {
+    const userId = socket.data.userId as string;
+
+    socket.join(`user:${userId}`);
     socket.on(
       "joinQueue",
       async (payload: { doctorId: string; token: string }, ack?: (r: unknown) => void) => {
