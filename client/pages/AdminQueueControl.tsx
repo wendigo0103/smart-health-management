@@ -241,6 +241,15 @@ export default function AdminQueueControl() {
           {sortedQueues.map((queue) => {
             const current = queue.waitingList.find((w) => w.status === "called");
             const waiting = queue.waitingList.filter((w) => w.status === "waiting");
+            const completed = queue.waitingList.filter(
+              (w) => w.status === "completed"
+            );
+            
+            const missed = queue.waitingList.filter(
+              (w) => w.status === "missed"
+            );
+            
+            const servingCount = current ? 1 : 0;
             const draft = statusDrafts[queue.doctorId] ?? {
               status: queue.doctorStatus,
               delayMinutes: String(queue.delayMinutes || 0),
@@ -326,6 +335,37 @@ export default function AdminQueueControl() {
                     ) : (
                       <p className="text-slate-600">No patient currently called.</p>
                     )}
+                  </div>
+
+                  {/* Queue statistics */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-center">
+                      <p className="text-xs text-slate-500">Waiting</p>
+                      <p className="text-2xl font-bold text-primary">
+                        {waiting.length}
+                      </p>
+                    </div>
+
+                    <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-center">
+                      <p className="text-xs text-slate-500">Serving</p>
+                      <p className="text-2xl font-bold text-blue-700">
+                        {servingCount}
+                      </p>
+                    </div>
+
+                    <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-center">
+                      <p className="text-xs text-slate-500">Completed</p>
+                      <p className="text-2xl font-bold text-emerald-700">
+                        {completed.length}
+                      </p>
+                    </div>
+
+                    <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-center">
+                      <p className="text-xs text-slate-500">Missed</p>
+                      <p className="text-2xl font-bold text-red-700">
+                        {missed.length}
+                      </p>
+                    </div>
                   </div>
 
                   <div className="space-y-2">
