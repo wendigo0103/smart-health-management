@@ -52,7 +52,12 @@ export interface AuthResponse {
   user: UserPublic;
 }
 
-export type AppointmentStatusApi = "confirmed" | "pending" | "cancelled" | "completed" | "missed";
+export type AppointmentStatusApi =
+  | "confirmed"
+  | "pending"
+  | "cancelled"
+  | "completed"
+  | "missed";
 
 export interface AppointmentDto {
   id: string;
@@ -156,6 +161,7 @@ export interface AnalyticsSummary {
   remainingToday: number;
   cancelledToday: number;
   completionRate: number;
+  missedToday: number;
   peakHour: string;
   patientsPerHour: { hour: string; count: number }[];
   statusDistribution: { status: AppointmentStatusApi; count: number; percentage: number }[];

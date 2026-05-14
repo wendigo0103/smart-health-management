@@ -11,7 +11,11 @@ import { requestNotificationPermission, showLocalQueueNotification } from "@/lib
 import type { QueueSnapshot, QueueWaitingEntryDto } from "@shared/api";
 import { toast } from "sonner";
 
-type QueueLocationState = { doctorId?: string; token?: string };
+type QueueLocationState = {
+  doctorId?: string;
+  token?: string;
+  appointmentId?: string;
+};
 
 const QUEUE_CTX_KEY = "queue_ctx";
 
@@ -24,30 +28,48 @@ export default function QueueTracker() {
   const [snapshot, setSnapshot] = useState<QueueSnapshot | null>(null);
   const [doctorId, setDoctorId] = useState<string | null>(null);
   const [myToken, setMyToken] = useState<string | null>(null);
+  const [appointmentId, setAppointmentId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     let d = state.doctorId ?? null;
     let t = state.token ?? null;
-    if (!d || !t) {
+    let a = state.appointmentId ?? null;
+  
+    if (!d || !t || !a) {
       try {
         const raw = sessionStorage.getItem(QUEUE_CTX_KEY);
+  
         if (raw) {
           const parsed = JSON.parse(raw) as QueueLocationState;
+  
           d = d || parsed.doctorId || null;
           t = t || parsed.token || null;
+          a = a || parsed.appointmentId || null;
         }
       } catch {
         /* ignore */
       }
     }
-    if (!d || !t) {
+  
+    if (!d || !t || !a) {
       setLoadError("missing_context");
       return;
     }
+  
     setDoctorId(d);
     setMyToken(t);
-  }, [state.doctorId, state.token]);
+    setAppointmentId(a);
+  
+    sessionStorage.setItem(
+      QUEUE_CTX_KEY,
+      JSON.stringify({
+        doctorId: d,
+        token: t,
+        appointmentId: a,
+      })
+    );
+  }, [state.doctorId, state.token, state.appointmentId]);
 
   useEffect(() => {
     if (!doctorId) return;
@@ -132,8 +154,14 @@ export default function QueueTracker() {
 
   const myEntry = useMemo(() => {
     if (!snapshot || !myToken) return null;
-    return snapshot.waitingList.find((w) => w.token === myToken) ?? null;
-  }, [snapshot, myToken]);
+    return (
+      snapshot.waitingList.find(
+        (w) =>
+          w.token === myToken &&
+          w.appointmentId === appointmentId
+      ) ?? null
+    );
+  }, [snapshot, myToken, appointmentId]);
 
   const { patientsAhead, statusLabel, estWaitMins } = useMemo(() => {
     if (!snapshot || !myToken) {
@@ -182,10 +210,36 @@ export default function QueueTracker() {
     return ordered.map((item) => mapRow(item, myToken, snapshot.currentPatientToken));
   }, [snapshot, myToken]);
 
-  const handleLeaveQueue = () => {
-    if (confirm("Leave the tracker? Your appointment in the system is unchanged.")) {
+  const handleLeaveQueue = async () => {
+    if (!doctorId || !myToken) return;
+    
+    
+    const confirmed = confirm(
+      "Leave queue and mark appointment as missed?"
+    );
+    
+    if (!confirmed) return;
+    console.log({
+      doctorId,
+      myToken,
+      appointmentId,
+    });
+  
+    try {
+      await apiFetch(`/api/queue/${doctorId}/leave`, {
+        method: "POST",
+        body: JSON.stringify({
+          appointmentId,
+        }),
+      });
+  
       sessionStorage.removeItem(QUEUE_CTX_KEY);
+  
+      toast.success("You left the queue.");
+  
       navigate("/dashboard");
+    } catch {
+      toast.error("Could not leave queue.");
     }
   };
 

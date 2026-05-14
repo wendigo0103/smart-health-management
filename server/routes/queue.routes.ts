@@ -7,6 +7,7 @@ import {
   callNextPatient,
   markCurrentAbsent,
   updateDoctorQueueStatus,
+  leaveQueue,
 } from "../services/queue.service";
 import { broadcastQueueUpdate } from "../services/realtime.service";
 import { User } from "../models/User";
@@ -112,6 +113,38 @@ const postAbsent: RequestHandler = async (req, res) => {
   res.json(await buildQueueSnapshot(doctorId));
 };
 
+const postLeaveQueue: RequestHandler = async (req, res) => {
+  const doctorId = String(req.params.doctorId ?? "");
+  const appointmentId = String(req.body.appointmentId ?? "");
+
+  if (!mongoose.Types.ObjectId.isValid(doctorId)) {
+    res.status(400).json({ error: "invalid doctorId" });
+    return;
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(appointmentId)) {
+    res.status(400).json({ error: "invalid appointmentId" });
+    return;
+  }
+
+  const auth = req.authUser;
+
+  if (!auth) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  await leaveQueue({
+    doctorId,
+    appointmentId,
+    patientId: auth.id,
+  });
+
+  await broadcastQueueUpdate(doctorId);
+
+  res.json(await buildQueueSnapshot(doctorId));
+};
+
 const patchDoctorStatus: RequestHandler = async (req, res) => {
   const doctorId = String(req.params.doctorId ?? "");
   if (!mongoose.Types.ObjectId.isValid(doctorId)) {
@@ -143,6 +176,7 @@ router.get("/admin/active", requireAuth, requireRole("admin"), getActiveQueue);
 router.get("/:doctorId", requireAuth, getQueue);
 router.post("/:doctorId/next", requireAuth, requireRole("admin"), postNext);
 router.post("/:doctorId/absent", requireAuth, requireRole("admin"), postAbsent);
+router.post("/:doctorId/leave", requireAuth, postLeaveQueue);
 router.patch("/:doctorId/status", requireAuth, requireRole("admin"), patchDoctorStatus);
 
 export default router;

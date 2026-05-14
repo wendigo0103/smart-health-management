@@ -129,7 +129,7 @@ export async function enqueuePatient(args: {
 }): Promise<IQueue> {
   const q = await ensureQueueForDoctor(args.doctorId);
   const already = q.waitingList.some(
-    (w) => w.token === args.token
+    (w) => w.appointmentId?.toString() === args.appointmentId
   );
   if (!already) {
     q.waitingList.push({
@@ -284,5 +284,53 @@ export async function markCurrentAbsent(doctorId: string): Promise<IQueue> {
   next.status = "called";
   q.currentPatientToken = next.token;
   await q.save();
+  return q;
+}
+
+export async function leaveQueue(args: {
+  doctorId: string;
+  appointmentId: string;
+  patientId: string;
+}): Promise<IQueue> {
+  const q = await ensureQueueForDoctor(args.doctorId);
+
+  const entry = q.waitingList.find(
+    (w) =>
+      w.appointmentId?.toString() === args.appointmentId &&
+      w.patientId.toString() === args.patientId
+  );
+
+  if (!entry) {
+    return q;
+  }
+
+  if (entry.appointmentId) {
+    await Appointment.updateOne(
+      {
+        _id: entry.appointmentId,
+        status: { $ne: "cancelled" },
+      },
+      {
+        $set: {
+          status: "missed",
+        },
+      }
+    );
+  }
+
+  q.waitingList = q.waitingList.filter(
+    (w) =>
+      !(
+        w.appointmentId?.toString() === args.appointmentId &&
+        w.patientId.toString() === args.patientId
+      )
+  );
+
+  if (q.currentPatientToken === entry.token) {
+    q.currentPatientToken = "0";
+  }
+
+  await q.save();
+
   return q;
 }

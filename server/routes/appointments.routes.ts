@@ -252,7 +252,9 @@ const analytics: RequestHandler = async (req, res) => {
     statusCounts.find((s) => s._id === status)?.count ?? 0;
   const completed = countFor("completed");
   const cancelled = countFor("cancelled");
+  const missed = countFor("missed");
   const remaining = countFor("confirmed") + countFor("pending");
+  
   const peak = hourlyCounts.reduce((best, item) => (item.count > best.count ? item : best), {
     _id: 0,
     count: 0,
@@ -263,6 +265,7 @@ const analytics: RequestHandler = async (req, res) => {
     completedToday: completed,
     remainingToday: remaining,
     cancelledToday: cancelled,
+    missedToday: missed,
     completionRate: total ? Math.round((completed / total) * 100) : 0,
     peakHour: peak.count ? `${String(peak._id).padStart(2, "0")}:00` : "No bookings",
     patientsPerHour: hourlyCounts.map((h) => ({

@@ -32,7 +32,7 @@ AppointmentSchema.index(
   { doctorId: 1, scheduledAt: 1 },
   {
     unique: true,
-    partialFilterExpression: { status: { $in: ["confirmed", "pending", "completed"] } },
+    partialFilterExpression: { status: { $in: ["confirmed", "pending"] } },
   }
 );
 

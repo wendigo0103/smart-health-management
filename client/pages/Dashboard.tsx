@@ -76,7 +76,7 @@ function AppointmentCard({
           <Badge className={`${statusClass(appointment.status)} border-0 capitalize w-fit`}>
             {appointment.status}
           </Badge>
-          {appointment.status === "missed" && (
+          {/* {appointment.status === "missed" && (
             <Button
               type="button"
               size="sm"
@@ -88,7 +88,7 @@ function AppointmentCard({
             >
               Reschedule
             </Button>
-          )}
+          )} */}
         </div>
       </CardContent>
     </Card>
@@ -144,10 +144,6 @@ export default function Dashboard() {
             <Stethoscope size={18} />
             Book Appointment
           </Button>
-          <Button onClick={() => navigate("/queue")} variant="outline" className="gap-2">
-            <Route size={18} />
-            Track Queue
-          </Button>
         </div>
 
         {loading ? (
@@ -172,7 +168,15 @@ export default function Dashboard() {
                       key={appointment.id}
                       appointment={appointment}
                       onReschedule={() => navigate("/book-appointment")}
-                      onOpenBooking={() => navigate(`/queue`)}
+                      onOpenBooking={() =>
+                        navigate("/queue", {
+                          state: {
+                            doctorId: appointment.doctorId,
+                            token: appointment.token,
+                            appointmentId: appointment.id,
+                          },
+                        })
+                      }
                     />
                   ))
                 )}
