@@ -3,6 +3,7 @@ import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import type { UserRole } from "@shared/api";
 import { getJwtSecret } from "../services/auth.service";
+import { isOriginAllowed } from "./cors";
 import { setIo } from "../services/realtime.service";
 import { Queue } from "../models/Queue";
 import { User } from "../models/User";
@@ -10,7 +11,16 @@ import { User } from "../models/User";
 export function initSocket(httpServer: HttpServer): void {
   const io = new Server(httpServer, {
     path: "/socket.io/",
-    cors: { origin: true, credentials: true },
+    cors: {
+      origin(origin, callback) {
+        if (isOriginAllowed(origin)) {
+          callback(null, true);
+          return;
+        }
+        callback(new Error(`Socket.io CORS blocked for origin: ${origin ?? "unknown"}`));
+      },
+      credentials: true,
+    },
   });
   setIo(io);
 

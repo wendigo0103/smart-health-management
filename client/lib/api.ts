@@ -3,6 +3,33 @@ import { resetQueueSocket } from "./socket";
 
 const TOKEN_KEY = "hq_token";
 const USER_KEY = "hq_user";
+const API_BASE_URL = resolveApiBaseUrl();
+
+function normalizeBaseUrl(value: string): string {
+  return value.trim().replace(/\/+$/, "");
+}
+
+function resolveApiBaseUrl(): string {
+  const configuredUrl = import.meta.env.VITE_API_URL?.trim();
+  if (configuredUrl) {
+    return normalizeBaseUrl(configuredUrl);
+  }
+  return "";
+}
+
+export function getApiBaseUrl(): string {
+  return API_BASE_URL;
+}
+
+function toApiUrl(path: string): string {
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
+  if (!API_BASE_URL) {
+    return path;
+  }
+  return path.startsWith("/") ? `${API_BASE_URL}${path}` : `${API_BASE_URL}/${path}`;
+}
 
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
@@ -49,7 +76,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
-  const res = await fetch(path, { ...init, headers });
+  const res = await fetch(toApiUrl(path), { ...init, headers });
   if (!res.ok) {
     let msg = res.statusText;
     try {

@@ -1,15 +1,22 @@
 import { io, type Socket } from "socket.io-client";
-import { getToken } from "./api";
+import { getApiBaseUrl, getToken } from "./api";
 
 let socket: Socket | null = null;
 
 export function getQueueSocket(): Socket {
   if (!socket) {
-    socket = io({
-      path: "/socket.io/",
-      autoConnect: false,
-      auth: { token: getToken() ?? "" },
-    });
+    const baseUrl = getApiBaseUrl();
+    socket = baseUrl
+      ? io(baseUrl, {
+          path: "/socket.io/",
+          autoConnect: false,
+          auth: { token: getToken() ?? "" },
+        })
+      : io({
+          path: "/socket.io/",
+          autoConnect: false,
+          auth: { token: getToken() ?? "" },
+        });
   }
   return socket;
 }

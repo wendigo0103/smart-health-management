@@ -8,6 +8,7 @@ import doctorsRoutes from "./routes/doctors.routes";
 import appointmentsRoutes from "./routes/appointments.routes";
 import queueRoutes from "./routes/queue.routes";
 import { initSocket } from "./config/socket";
+import { createCorsOptions } from "./config/cors";
 import { getIo } from "./services/realtime.service";
 import notificationRoutes from "./routes/notification.routes";
 
@@ -17,7 +18,7 @@ import notificationRoutes from "./routes/notification.routes";
 export function createApp(): express.Express {
   const app = express();
 
-  app.use(cors());
+  app.use(cors(createCorsOptions()));
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
